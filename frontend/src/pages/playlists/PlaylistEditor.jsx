@@ -4,7 +4,7 @@ import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, 
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  GripVertical, Trash2, Plus, Image as ImageIcon, Puzzle, Save, MonitorPlay, Copy, Settings2, Clock, Newspaper, Music, Film, ListVideo, VolumeX, Volume2, Maximize, Minimize,
+  GripVertical, Trash2, Plus, Image as ImageIcon, Puzzle, Save, MonitorPlay, Copy, Settings2, Clock, PanelBottom, Paintbrush, Music, Film, ListVideo, VolumeX, Volume2, Maximize, Minimize,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -12,10 +12,11 @@ import { useFetch } from '../../lib/hooks'
 import { formatDuration, plural } from '../../lib/format'
 import { INTEGRATION_TYPES, defaultDurationFor } from '../../lib/integrationTypes'
 import { useConfirm, useToast } from '../../components/feedback'
-import { Badge, Button, Card, CardTitle, EmptyState, ErrorState, Field, IconButton, Input, Modal, PageHeader, PageLoader, Select, Textarea, cn } from '../../components/ui'
+import { Badge, Button, Card, CardTitle, EmptyState, ErrorState, Field, IconButton, Input, Modal, PageHeader, PageLoader, Select, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
 import { MediaThumb } from '../media/MediaPage'
 import { PlaylistPreviewModal } from '../../components/Preview'
+import FooterEditor, { DEFAULT_FOOTER, SLOT_TYPES } from './FooterEditor'
 
 const uid = () => Math.random().toString(36).slice(2)
 const REMOTE = ['rss', 'weather', 'sports', 'currency']
@@ -110,7 +111,7 @@ function IntegrationPicker({ open, onClose, integrations, onSelect }) {
 export default function PlaylistEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { orgId, canCreate } = useAuth()
+  const { orgId, canCreate, org } = useAuth()
   const toast = useToast()
   const confirm = useConfirm()
   const { data, error, loading, reload } = useFetch(`orgs/${orgId}/playlists/${id}`)
@@ -120,6 +121,7 @@ export default function PlaylistEditor() {
   const [saving, setSaving] = useState(false)
   const [picker, setPicker] = useState(null)
   const [preview, setPreview] = useState(false)
+  const [footerOpen, setFooterOpen] = useState(false)
 
   useEffect(() => {
     if (!data) return
@@ -128,8 +130,7 @@ export default function PlaylistEditor() {
       name: p.name,
       description: p.description || '',
       transition: p.transition,
-      ticker_integration_id: p.ticker_integration_id || '',
-      ticker_text: p.ticker_text || '',
+      footer: p.footer || { ...DEFAULT_FOOTER, enabled: false },
       music_integration_id: p.music_integration_id || '',
       items: p.items.map((it) => ({ ...it, uid: uid(), settings: Array.isArray(it.settings) ? {} : it.settings || {} })),
     })
@@ -177,8 +178,7 @@ export default function PlaylistEditor() {
         name: state.name,
         description: state.description,
         transition: state.transition,
-        ticker_integration_id: state.ticker_integration_id || null,
-        ticker_text: state.ticker_text,
+        footer: state.footer,
         music_integration_id: state.music_integration_id || null,
         items: state.items.map((it) => ({ type: it.type, media_id: it.media?.id, integration_id: it.integration_id, duration: it.duration, settings: it.settings })),
       })
@@ -217,14 +217,22 @@ export default function PlaylistEditor() {
     id: Number(id),
     name: state.name,
     transition: state.transition,
-    ticker_integration_id: state.ticker_integration_id || null,
-    ticker_text: state.ticker_text,
+    footer: state.footer,
     music_integration_id: null,
     items: state.items.map((it, k) => ({ ...it, id: k + 1 })),
   }
   const previewIntegrations = Object.fromEntries(integrations.map((i) => [i.id, { ...i, has_data: REMOTE.includes(i.type) }]))
 
-  const tickerOptions = integrations.filter((i) => i.type === 'rss' || i.type === 'text')
+  const buildFooterPreview = (footer) => ({
+    version: 'footer-preview',
+    screen: { id: 0, name: 'Prévia', is_active: true, muted: true, rotation: 0 },
+    organization: { name: org?.name, logo_url: org?.logo_url, timezone: data.timezone },
+    default_playlist_id: previewPlaylist.id,
+    schedules: [],
+    playlists: { [previewPlaylist.id]: { ...previewPlaylist, footer } },
+    integrations: previewIntegrations,
+  })
+  const footerSlots = state.footer?.enabled ? state.footer.slots : []
   const musicOptions = integrations.filter((i) => i.type === 'music')
   const used = data.playlist.used_in
 
@@ -291,18 +299,17 @@ export default function PlaylistEditor() {
           </Card>
 
           <Card>
-            <CardTitle icon={Newspaper}>Rodapé de notícias</CardTitle>
-            <div className="space-y-4">
-              <Field label="Fonte das manchetes" hint="Uma faixa rolando na parte de baixo da tela.">
-                <Select disabled={readOnly} value={state.ticker_integration_id} onChange={(e) => set({ ticker_integration_id: e.target.value ? Number(e.target.value) : '' })}>
-                  <option value="">Nenhuma</option>
-                  {tickerOptions.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Mensagens próprias" optional hint="Uma por linha. Ex.: promoções, avisos internos.">
-                <Textarea disabled={readOnly} value={state.ticker_text} onChange={(e) => set({ ticker_text: e.target.value })} className="min-h-20" placeholder="Hoje: café da manhã até 10h&#10;Siga @minhaempresa" />
-              </Field>
-            </div>
+            <CardTitle icon={PanelBottom} action={!readOnly && <Button size="sm" variant="subtle" icon={Paintbrush} onClick={() => setFooterOpen(true)}>Personalizar</Button>}>Barra inferior</CardTitle>
+            {footerSlots.length === 0 ? (
+              <p className="text-sm text-slate-500">Desligada — a playlist ocupa a tela inteira. Adicione notícias, relógio, clima, cotações, logo ou uma imagem de patrocinador.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {footerSlots.map((sl, i) => {
+                  const def = SLOT_TYPES[sl.type]
+                  return <span key={i} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium', def.color)}><def.icon className="size-3.5" />{def.label}</span>
+                })}
+              </div>
+            )}
           </Card>
 
           <Card>
@@ -342,6 +349,7 @@ export default function PlaylistEditor() {
 
       <MediaPicker open={picker === 'media'} onClose={() => setPicker(null)} onSelect={addMedia} />
       <IntegrationPicker open={picker === 'integration'} onClose={() => setPicker(null)} integrations={integrations} onSelect={addIntegration} />
+      <FooterEditor open={footerOpen} onClose={() => setFooterOpen(false)} value={state.footer} onApply={(footer) => set({ footer })} integrations={integrations} buildPreview={buildFooterPreview} />
       <PlaylistPreviewModal open={preview} onClose={() => setPreview(false)} playlist={previewPlaylist} integrations={previewIntegrations} timezone={data.timezone} />
     </div>
   )

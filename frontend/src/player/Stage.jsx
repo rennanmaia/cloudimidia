@@ -4,6 +4,7 @@ import {
   NewsWidget, WeatherWidget, SportsWidget, CurrencyWidget, ClockWidget, TextWidget, WebpageWidget, YoutubeWidget,
   useIntegrationData, loadIntegrationData,
 } from './widgets'
+import Footer from './Footer'
 import './player.css'
 
 const DEFAULTS = { weather: 15, sports: 20, currency: 15, clock: 10, text: 12, webpage: 30, youtube: 60 }
@@ -111,40 +112,6 @@ function WidgetItem({ item, integration, fetchData, onEnd, duration, timezone, m
     case 'youtube': return <YoutubeWidget {...props} />
     default: return null
   }
-}
-
-/* ---------------- Rodapé de notícias ---------------- */
-function Ticker({ playlist, integrations, fetchData, logo, timezone }) {
-  const integ = playlist?.ticker_integration_id ? integrations?.[playlist.ticker_integration_id] : null
-  const data = useIntegrationData(integ?.type === 'rss' ? integ : null, fetchData)
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 15000)
-    return () => clearInterval(t)
-  }, [])
-  const texts = useMemo(() => {
-    const list = []
-    if (playlist?.ticker_text) list.push(...playlist.ticker_text.split('\n').filter(Boolean))
-    if (integ?.type === 'text') list.push([integ.config?.title, integ.config?.message].filter(Boolean).join(' — '))
-    if (integ?.type === 'rss' && data?.items) list.push(...data.items.map((i) => i.title))
-    return list.filter(Boolean)
-  }, [playlist?.ticker_text, integ, data])
-  if (!texts.length) return null
-  const label = integ?.type === 'rss' ? (data?.source || integ.name) : 'Avisos'
-  const speed = Math.max(20, texts.join(' ').length * 0.16)
-  let clock = ''
-  try { clock = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: timezone }) } catch { clock = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }
-  return (
-    <div className="cm-ticker">
-      <div className="cm-ticker-label">{logo && <img src={logo} alt="" />}{label}</div>
-      <div className="cm-ticker-track">
-        <div key={texts.join('|')} className="cm-ticker-text" style={{ animationDuration: `${speed}s` }}>
-          {texts.map((t, i) => <span key={i}>{t}</span>)}
-        </div>
-      </div>
-      <div className="cm-ticker-clock">{clock}</div>
-    </div>
-  )
 }
 
 /* ---------------- Música ambiente ---------------- */
@@ -354,9 +321,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
           </div>
         )}
       </div>
-      {tickerPlaylist && (tickerPlaylist.ticker_integration_id || tickerPlaylist.ticker_text) && (
-        <Ticker playlist={tickerPlaylist} integrations={integrations} fetchData={fetchData} logo={manifest?.organization?.logo_url} timezone={manifest?.organization?.timezone} />
-      )}
+      {tickerPlaylist?.footer && <Footer footer={tickerPlaylist.footer} integrations={integrations} fetchData={fetchData} org={manifest?.organization} />}
       {musicInteg && <Music integration={musicInteg} paused={muted || videoSound} />}
     </div>
   )

@@ -113,8 +113,15 @@ class PlaylistController
         if (has_input('description')) $data['description'] = str_input('description', 500) ?: null;
         if (has_input('transition')) $data['transition'] = in_array(input('transition'), ['fade', 'slide', 'zoom', 'none'], true) ? input('transition') : 'fade';
         if (has_input('ticker_text')) $data['ticker_text'] = str_input('ticker_text', 1000) ?: null;
+        if (has_input('footer')) {
+            $footer = Footer::sanitize($ctx->id(), input('footer'));
+            $data['footer'] = $footer ? json_encode($footer, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+            // A barra configurável substitui o rodapé antigo
+            $data['ticker_integration_id'] = null;
+            $data['ticker_text'] = null;
+        }
         foreach (['ticker_integration_id' => ['rss', 'text'], 'music_integration_id' => ['music']] as $field => $types) {
-            if (has_input($field)) {
+            if (has_input($field) && !array_key_exists($field, $data)) {
                 $iid = int_or_null(input($field));
                 if ($iid && !DB::val('SELECT id FROM integrations WHERE id = ? AND organization_id = ? AND type IN (' . DB::in($types) . ')', array_merge([$iid, $ctx->id()], $types))) {
                     abort('Integração inválida.', 422);
@@ -196,6 +203,7 @@ class PlaylistController
                 'ticker_integration_id' => $p['ticker_integration_id'],
                 'ticker_text' => $p['ticker_text'],
                 'music_integration_id' => $p['music_integration_id'],
+                'footer' => $p['footer'],
                 'created_by' => $ctx->userId(),
                 'created_at' => now(),
                 'updated_at' => now(),

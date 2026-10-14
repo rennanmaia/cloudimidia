@@ -1,0 +1,9 @@
+/api/config.php
+/uploads/*
+!/uploads/.htaccess
+/storage/*
+!/storage/.htaccess
+/frontend/node_modules/
+/frontend/.env.local
+.DS_Store
+Thumbs.db

@@ -1,0 +1,21 @@
+Options -Indexes
+DirectoryIndex disabled
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Pastas internas nunca são servidas
+    RewriteRule ^(frontend|database|storage|node_modules|\.git)(/|$) - [F,L]
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+
+    # Painel (SPA)
+    RewriteRule ^$ public/index.html [END]
+    RewriteRule ^index\.html$ public/index.html [END]
+
+    # Player da TV
+    RewriteRule ^tv/?$ public/tv.html [END]
+    RewriteRule ^tv/(assets/.+)$ public/$1 [END]
+
+    # Arquivos estáticos do build
+    RewriteRule ^(assets/.+|favicon\.svg|icon-.+\.png|manifest\.webmanifest)$ public/$1 [END]
+</IfModule>

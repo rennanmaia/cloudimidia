@@ -151,3 +151,24 @@ function decode_json(?string $s, $default = [])
     $v = json_decode($s, true);
     return $v === null ? $default : $v;
 }
+
+function ini_bytes(string $key): int
+{
+    $v = trim((string)ini_get($key));
+    if ($v === '') return 0;
+    $n = (int)$v;
+    switch (strtolower(substr($v, -1))) {
+        case 'g': $n *= 1024;
+        case 'm': $n *= 1024;
+        case 'k': $n *= 1024;
+    }
+    return $n;
+}
+
+/** Maior parte de arquivo aceita por envio neste servidor (respeita os limites do PHP da hospedagem). */
+function max_chunk_bytes(): int
+{
+    $limits = array_filter([ini_bytes('upload_max_filesize'), ini_bytes('post_max_size') - 512 * 1024]);
+    $max = $limits ? min($limits) : 8 * 1024 * 1024;
+    return max(256 * 1024, min(8 * 1024 * 1024, (int)($max * 0.9)));
+}

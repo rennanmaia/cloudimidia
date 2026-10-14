@@ -47,6 +47,7 @@ class MediaController
             'usage' => org_usage($ctx->id()),
             'max_storage_mb' => $ctx->org['max_storage_mb'] !== null ? (int)$ctx->org['max_storage_mb'] : null,
             'max_upload_mb' => (int)config('max_upload_mb', 1024),
+            'max_chunk_bytes' => max_chunk_bytes(),
         ]);
     }
 
@@ -70,7 +71,10 @@ class MediaController
         if (!isset(self::TYPES[$ext])) abort('Formato não suportado. Envie imagens (JPG, PNG, WEBP, GIF), vídeos (MP4, WEBM) ou áudios (MP3, M4A, OGG, WAV).', 422);
 
         $file = $_FILES['file'] ?? null;
-        if (!$file || $file['error'] !== UPLOAD_ERR_OK) abort('Falha ao receber o arquivo. Tente novamente.', 422);
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+            $tooBig = $file && in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true);
+            abort($tooBig ? 'Parte do arquivo maior que o limite do servidor.' : 'Falha ao receber o arquivo. Tente novamente.', 422, ['max_chunk_bytes' => max_chunk_bytes()]);
+        }
         if ($file['size'] > self::CHUNK_MAX) abort('Parte do arquivo maior que o permitido.', 422);
 
         $maxUpload = (int)config('max_upload_mb', 1024) * 1024 * 1024;

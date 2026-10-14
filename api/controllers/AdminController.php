@@ -61,7 +61,13 @@ class AdminController
     {
         Auth::requireSuperadmin();
         $rows = DB::all('SELECT r.*, u.name AS creator_name FROM app_releases r LEFT JOIN users u ON u.id = r.created_by ORDER BY r.version_code DESC');
-        $installs = DB::all("SELECT JSON_UNQUOTE(JSON_EXTRACT(diagnostics, '$.app_version_code')) AS code, COUNT(*) AS n FROM screens WHERE diagnostics IS NOT NULL GROUP BY code");
+        // Contagem feita no PHP (compatível com MySQL 5.6, que não tem funções JSON)
+        $counts = [];
+        foreach (DB::col('SELECT diagnostics FROM screens WHERE diagnostics IS NOT NULL') as $json) {
+            $code = (int)(decode_json($json)['app_version_code'] ?? 0);
+            if ($code > 0) $counts[$code] = ($counts[$code] ?? 0) + 1;
+        }
+        $installs = array_map(fn($c, $n) => ['code' => $c, 'n' => $n], array_keys($counts), array_values($counts));
         respond([
             'releases' => array_map(fn($r) => [
                 'id' => (int)$r['id'],
@@ -75,6 +81,7 @@ class AdminController
             ], $rows),
             'installs' => array_map(fn($i) => ['version_code' => (int)$i['code'], 'screens' => (int)$i['n']], $installs),
             'download_url' => app_url('api/player/app/download'),
+            'max_chunk_bytes' => max_chunk_bytes(),
         ]);
     }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Image as ImageIcon, Film, Music, Upload, Trash2, Save, Play, HardDrive, Layers } from 'lucide-react'
-import { api } from '../../lib/api'
+import { api, setServerChunk } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useDebounced, useFetch } from '../../lib/hooks'
 import { formatBytes, formatDateTime, formatDuration, plural } from '../../lib/format'
@@ -44,6 +44,7 @@ export default function MediaPage() {
 
   useEffect(() => { if (uploader.queue.length) setShowUpload(true) }, [uploader.queue.length])
 
+  useEffect(() => { if (data?.max_chunk_bytes) setServerChunk(data.max_chunk_bytes) }, [data?.max_chunk_bytes])
   const media = data?.media || []
   const maxBytes = data?.max_storage_mb ? data.max_storage_mb * 1048576 : null
 

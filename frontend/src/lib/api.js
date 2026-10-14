@@ -58,8 +58,32 @@ export const api = {
   del: (p, o) => request(p, { ...o, method: 'DELETE' }),
 }
 
-/** Envio de arquivo em partes, com progresso (0..1). */
-export function uploadChunked(orgId, file, { meta = {}, thumbnail, onProgress, chunkSize = 4 * 1024 * 1024, endpoint } = {}) {
+/** Maior parte aceita pelo servidor (informada pela API; hospedagens podem limitar a 2 MB). */
+let serverChunk = 4 * 1024 * 1024
+export const setServerChunk = (bytes) => { if (bytes > 0) serverChunk = bytes }
+
+/** Envio de arquivo em partes, com progresso (0..1). Se o servidor recusar o tamanho da parte, recomeça com partes menores. */
+export function uploadChunked(orgId, file, opts = {}) {
+  let current = null
+  let cancelled = false
+  const run = async (size) => {
+    current = uploadChunkedOnce(orgId, file, { ...opts, chunkSize: size })
+    try {
+      return await current.promise
+    } catch (e) {
+      const max = Number(e.errors?.max_chunk_bytes)
+      if (!cancelled && max > 0 && max < size) {
+        setServerChunk(max)
+        return run(max)
+      }
+      throw e
+    }
+  }
+  const promise = run(Math.min(opts.chunkSize || serverChunk, serverChunk))
+  return { promise, cancel: () => { cancelled = true; current?.cancel() } }
+}
+
+function uploadChunkedOnce(orgId, file, { meta = {}, thumbnail, onProgress, chunkSize = 4 * 1024 * 1024, endpoint } = {}) {
   const target = endpoint || `orgs/${orgId}/media/upload`
   const uploadId = (crypto.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, '')
   const total = Math.max(1, Math.ceil(file.size / chunkSize))
@@ -91,7 +115,7 @@ export function uploadChunked(orgId, file, { meta = {}, thumbnail, onProgress, c
       let data = null
       try { data = JSON.parse(xhr.responseText) } catch { /* */ }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data)
-      else reject(new ApiError(data?.error || `Erro ${xhr.status}`, xhr.status))
+      else reject(new ApiError(data?.error || `Erro ${xhr.status}`, xhr.status, data?.errors))
     }
     xhr.onerror = () => reject(new ApiError('Falha de conexão durante o envio.', 0))
     xhr.onabort = () => reject(new ApiError('Envio cancelado.', -1))

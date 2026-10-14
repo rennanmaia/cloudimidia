@@ -31,7 +31,7 @@ export default function AppReleases() {
     if (!file) return toast.error('Escolha o arquivo .apk')
     setProgress(0)
     try {
-      await uploadChunked(null, file, { endpoint: 'admin/releases/upload', meta: form, onProgress: setProgress, chunkSize: 8 * 1024 * 1024 }).promise
+      await uploadChunked(null, file, { endpoint: 'admin/releases/upload', meta: form, onProgress: setProgress, chunkSize: data.max_chunk_bytes || 2 * 1024 * 1024 }).promise
       toast.success(`Versão ${form.version_name} publicada. As TVs atualizam sozinhas em até 6 horas (ou pelo comando "Atualizar app").`)
       setFile(null)
       setForm({ version_name: '', version_code: '', notes: '' })

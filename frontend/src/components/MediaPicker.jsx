@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Upload, Image as ImageIcon } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { setServerChunk } from '../lib/api'
 import { useFetch } from '../lib/hooks'
 import { formatDuration } from '../lib/format'
 import { MediaThumb } from '../pages/media/MediaPage'
@@ -23,6 +24,7 @@ export default function MediaPicker({ open, onClose, onSelect, types = ['image',
     if (open) { setSelected(initial); setQ(''); setType(''); setUploading(false) }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { if (data?.max_chunk_bytes) setServerChunk(data.max_chunk_bytes) }, [data?.max_chunk_bytes])
   const all = (data?.media || []).filter((m) => types.includes(m.type))
   const list = all.filter((m) => (!type || m.type === type) && (!q || m.name.toLowerCase().includes(q.toLowerCase())))
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))

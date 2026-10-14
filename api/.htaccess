@@ -21,3 +21,8 @@ Options -Indexes
     php_value post_max_size 70M
     php_value max_execution_time 120
 </IfModule>
+<IfModule litespeed>
+    php_value upload_max_filesize 64M
+    php_value post_max_size 70M
+    php_value max_execution_time 120
+</IfModule>

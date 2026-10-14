@@ -13,7 +13,9 @@ import IntegrationForm from './IntegrationForm'
 function describe(i, leagues) {
   const c = i.config || {}
   switch (i.type) {
-    case 'rss': return c.url?.replace(/^https?:\/\//, '')
+    case 'rss': return c.urls?.length > 1
+      ? `${c.urls.length} fontes: ${c.urls.map((u) => u.replace(/^https?:\/\//, '').split('/')[0]).join(', ')}`
+      : c.url?.replace(/^https?:\/\//, '')
     case 'weather': return c.city
     case 'sports': return c.title || leagues?.[c.league]
     case 'currency': return (c.pairs || []).map((p) => p.split('-')[0]).join(', ')

@@ -45,9 +45,18 @@ class Integrations
 
         switch ($type) {
             case 'rss':
-                $u = $url('url');
-                if ($u === '') abort('Informe o endereço do feed de notícias (RSS).', 422);
-                return ['url' => $u, 'max_items' => $int('max_items', 1, 30, 10), 'item_duration' => $int('item_duration', 4, 60, 10), 'show_images' => $bool('show_images', true), 'source_name' => $str('source_name', 60)];
+                // Uma ou várias fontes (ex.: g1 + ge da mesma região), misturadas por horário
+                $list = isset($c['urls']) && is_array($c['urls']) ? $c['urls'] : [$c['url'] ?? ''];
+                $urls = [];
+                foreach ($list as $one) {
+                    $one = is_scalar($one) ? trim((string)$one) : '';
+                    if ($one === '') continue;
+                    if (!preg_match('#^https?://#i', $one)) abort('Informe endereços válidos começando com http:// ou https://', 422);
+                    $urls[] = mb_substr($one, 0, 1000);
+                }
+                $urls = array_slice(array_values(array_unique($urls)), 0, 5);
+                if (!$urls) abort('Informe o endereço do feed de notícias (RSS).', 422);
+                return ['url' => $urls[0], 'urls' => $urls, 'max_items' => $int('max_items', 1, 30, 10), 'item_duration' => $int('item_duration', 4, 60, 10), 'show_images' => $bool('show_images', true), 'source_name' => $str('source_name', 60)];
             case 'weather':
                 if (!isset($c['latitude'], $c['longitude']) || !is_numeric($c['latitude']) || !is_numeric($c['longitude'])) {
                     abort('Selecione a cidade para a previsão do tempo.', 422);
@@ -213,7 +222,41 @@ class Integrations
 
     public static function rss(array $c): array
     {
-        $xmlStr = self::httpGet($c['url']);
+        $urls = $c['urls'] ?? [$c['url']];
+        $feeds = [];
+        $errors = [];
+        foreach ($urls as $u) {
+            try {
+                $feeds[] = self::rssFeed($u, $c);
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+        if (!$feeds) throw new RuntimeException($errors[0] ?? 'O feed não possui notícias.');
+        if (count($feeds) === 1) {
+            $f = $feeds[0];
+            return ['source' => $c['source_name'] ?: $f['title'], 'items' => $f['items']];
+        }
+        // Várias fontes: mistura por data (mais recentes primeiro), sem repetir manchetes
+        $all = [];
+        $seen = [];
+        foreach ($feeds as $f) {
+            foreach ($f['items'] as $it) {
+                $key = mb_strtolower($it['title']);
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+                $all[] = $it + ['source' => $f['short']];
+            }
+        }
+        usort($all, fn($a, $b) => strcmp((string)$b['date'], (string)$a['date']));
+        $names = array_values(array_unique(array_column($feeds, 'short')));
+        return ['source' => $c['source_name'] ?: implode(' + ', $names), 'items' => array_slice($all, 0, $c['max_items'])];
+    }
+
+    /** Lê um feed RSS/Atom. Retorna título, nome curto (ex.: "g1") e notícias. */
+    private static function rssFeed(string $url, array $c): array
+    {
+        $xmlStr = self::httpGet($url);
         libxml_use_internal_errors(true);
         $xml = simplexml_load_string($xmlStr, 'SimpleXMLElement', LIBXML_NOCDATA);
         if (!$xml) throw new RuntimeException('O endereço informado não é um feed RSS válido.');
@@ -267,7 +310,10 @@ class Integrations
             ];
         }
         if (!$items) throw new RuntimeException('O feed não possui notícias.');
-        return ['source' => $c['source_name'] ?: self::cleanText($title, 60), 'items' => $items];
+        $clean = self::cleanText($title, 60);
+        // "g1 > Santarém e Região" -> "g1"
+        $short = trim(explode('>', $clean)[0]) ?: $clean;
+        return ['title' => $clean, 'short' => $short, 'items' => $items];
     }
 
     public static function weather(array $c): array

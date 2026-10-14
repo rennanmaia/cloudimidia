@@ -65,7 +65,7 @@ export function NewsWidget({ integration, data }) {
       {it.image && <div className="cm-news-shade" />}
       <div key={'b' + i} className={'cm-news-body' + (it.image ? '' : ' center')}>
         <div className="cm-news-meta">
-          <span className="cm-news-source">{data.source || integration.name}</span>
+          <span className="cm-news-source">{it.source || data.source || integration.name}</span>
           {it.date && <span>{relTime(it.date)}</span>}
         </div>
         <h1 className="cm-news-title">{it.title}</h1>

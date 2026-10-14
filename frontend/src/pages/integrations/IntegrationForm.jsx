@@ -3,14 +3,14 @@ import { Search, MapPin, CheckCircle2, Music, Radio, Library, Plus, X, FlaskConi
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useDebounced } from '../../lib/hooks'
-import { INTEGRATION_TYPES, RSS_PRESETS, CURRENCY_OPTIONS } from '../../lib/integrationTypes'
+import { INTEGRATION_TYPES, RSS_PRESET_GROUPS, CURRENCY_OPTIONS } from '../../lib/integrationTypes'
 import { useToast } from '../../components/feedback'
 import { Button, ColorPicker, Field, Input, Modal, Segmented, Select, Textarea, Toggle, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
 import { PreviewFrame } from '../../components/Preview'
 
 const DEFAULT_CONFIG = {
-  rss: { url: '', max_items: 10, item_duration: 10, show_images: true, source_name: '' },
+  rss: { url: '', urls: [''], max_items: 10, item_duration: 10, show_images: true, source_name: '' },
   weather: { city: '', latitude: null, longitude: null },
   sports: { league: 'soccer/bra.1', title: '' },
   currency: { pairs: ['USD-BRL', 'EUR-BRL', 'BTC-BRL'] },
@@ -78,18 +78,41 @@ function CitySearch({ value, onSelect }) {
 function ConfigFields({ type, config, set, leagues }) {
   const [picker, setPicker] = useState(false)
   const [tracks, setTracks] = useState([])
+  // Notícias: uma ou mais fontes (config.urls); configurações antigas têm só config.url
+  const urls = config.urls?.length ? config.urls : [config.url || '']
+  const setUrls = (list) => set({ urls: list, url: list[0] || '' })
   switch (type) {
     case 'rss':
       return (
         <div className="space-y-4">
-          <Field label="Portais sugeridos">
-            <div className="flex flex-wrap gap-1.5">
-              {RSS_PRESETS.map((p) => (
-                <button key={p.url} type="button" onClick={() => set({ url: p.url, source_name: p.name.split(' - ')[0] }, p.name)} className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition', config.url === p.url ? 'bg-rose-600 text-white ring-rose-600' : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300')}>{p.name}</button>
+          <Field label="Fontes prontas" hint="As opções “g1 + ge” juntam as duas fontes numa só faixa, misturando as notícias por horário.">
+            <div className="space-y-3">
+              {RSS_PRESET_GROUPS.map((g) => (
+                <div key={g.group}>
+                  <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">{g.group}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {g.items.map((p) => {
+                      const on = urls.join('|') === p.urls.join('|')
+                      return (
+                        <button key={p.name} type="button" onClick={() => set({ urls: p.urls, url: p.urls[0], source_name: p.source }, p.name)} className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition', on ? 'bg-rose-600 text-white ring-rose-600' : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300')}>{p.name}</button>
+                      )
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           </Field>
-          <Field label="Endereço do feed RSS" hint="Quase todo portal de notícias tem um link RSS."><Input type="url" required value={config.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://…/rss" /></Field>
+          <Field label={urls.length > 1 ? `Endereços dos feeds RSS (${urls.length})` : 'Endereço do feed RSS'} hint="Quase todo portal de notícias tem um link RSS. Adicione mais de um para juntar fontes.">
+            <div className="space-y-2">
+              {urls.map((u, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input type="url" required value={u} onChange={(e) => setUrls(urls.map((x, k) => (k === i ? e.target.value : x)))} placeholder="https://…/rss" />
+                  {urls.length > 1 && <button type="button" onClick={() => setUrls(urls.filter((_, k) => k !== i))} className="rounded-lg px-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Remover fonte"><X className="size-4" /></button>}
+                </div>
+              ))}
+              {urls.length < 5 && <Button size="sm" variant="ghost" icon={Plus} onClick={() => setUrls([...urls, ''])}>Adicionar outra fonte</Button>}
+            </div>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nº de notícias"><Input type="number" min={1} max={30} value={config.max_items} onChange={(e) => set({ max_items: Number(e.target.value) })} /></Field>
             <Field label="Segundos por notícia"><Input type="number" min={4} max={60} value={config.item_duration} onChange={(e) => set({ item_duration: Number(e.target.value) })} /></Field>

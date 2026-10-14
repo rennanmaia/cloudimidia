@@ -12,15 +12,37 @@ export const INTEGRATION_TYPES = {
   music: { label: 'Música ambiente', description: 'Rádio online ou músicas da sua biblioteca', icon: Music, color: 'bg-fuchsia-100 text-fuchsia-600', background: true },
 }
 
-export const RSS_PRESETS = [
-  { name: 'g1 - Últimas notícias', url: 'https://g1.globo.com/rss/g1/' },
-  { name: 'ge - Esportes', url: 'https://ge.globo.com/rss/ge/' },
-  { name: 'g1 - Economia', url: 'https://g1.globo.com/rss/g1/economia/' },
-  { name: 'g1 - Tecnologia', url: 'https://g1.globo.com/rss/g1/tecnologia/' },
-  { name: 'Folha - Em cima da hora', url: 'https://feeds.folha.uol.com.br/emcimadahora/rss091.xml' },
-  { name: 'Agência Brasil', url: 'https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml' },
-  { name: 'BBC News Brasil', url: 'https://feeds.bbci.co.uk/portuguese/rss.xml' },
-  { name: 'CNN Brasil', url: 'https://www.cnnbrasil.com.br/feed/' },
+/** Fontes de notícias prontas, por região. Várias URLs = manchetes misturadas por horário. */
+export const RSS_PRESET_GROUPS = [
+  {
+    group: 'Santarém e região (TV Tapajós)',
+    items: [
+      { name: 'g1 + ge Santarém e Região', source: 'TV Tapajós', urls: ['https://g1.globo.com/rss/g1/pa/santarem-regiao/', 'https://ge.globo.com/rss/ge/pa/santarem-regiao/'] },
+      { name: 'g1 Santarém e Região', source: 'g1 Santarém', urls: ['https://g1.globo.com/rss/g1/pa/santarem-regiao/'] },
+      { name: 'ge Santarém e Região', source: 'ge Santarém', urls: ['https://ge.globo.com/rss/ge/pa/santarem-regiao/'] },
+    ],
+  },
+  {
+    group: 'Pará',
+    items: [
+      { name: 'g1 Pará', source: 'g1 Pará', urls: ['https://g1.globo.com/rss/g1/pa/para/'] },
+      { name: 'ge Pará', source: 'ge Pará', urls: ['https://ge.globo.com/rss/ge/pa/'] },
+      { name: 'g1 + ge Pará', source: 'g1 + ge Pará', urls: ['https://g1.globo.com/rss/g1/pa/para/', 'https://ge.globo.com/rss/ge/pa/'] },
+    ],
+  },
+  {
+    group: 'Nacionais',
+    items: [
+      { name: 'g1 - Últimas notícias', source: 'g1', urls: ['https://g1.globo.com/rss/g1/'] },
+      { name: 'ge - Esportes', source: 'ge', urls: ['https://ge.globo.com/rss/ge/'] },
+      { name: 'g1 - Economia', source: 'g1 Economia', urls: ['https://g1.globo.com/rss/g1/economia/'] },
+      { name: 'g1 - Tecnologia', source: 'g1 Tecnologia', urls: ['https://g1.globo.com/rss/g1/tecnologia/'] },
+      { name: 'Folha - Em cima da hora', source: 'Folha', urls: ['https://feeds.folha.uol.com.br/emcimadahora/rss091.xml'] },
+      { name: 'Agência Brasil', source: 'Agência Brasil', urls: ['https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml'] },
+      { name: 'BBC News Brasil', source: 'BBC Brasil', urls: ['https://feeds.bbci.co.uk/portuguese/rss.xml'] },
+      { name: 'CNN Brasil', source: 'CNN Brasil', urls: ['https://www.cnnbrasil.com.br/feed/'] },
+    ],
+  },
 ]
 
 export const CURRENCY_OPTIONS = [

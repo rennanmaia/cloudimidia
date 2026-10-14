@@ -92,7 +92,9 @@ function client_ip(): string
 function send_cors_headers(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if ($origin && in_array($origin, (array)config('cors_origins', []), true)) {
+    // O app da TV serve o player localmente em http://127.0.0.1:<porta>
+    $isLocalApp = (bool)preg_match('#^http://(127\.0\.0\.1|localhost)(:\d+)?$#', $origin);
+    if ($origin && ($isLocalApp || in_array($origin, (array)config('cors_origins', []), true))) {
         header('Access-Control-Allow-Origin: ' . $origin);
         header('Vary: Origin');
         header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Device-Token');

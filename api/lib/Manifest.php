@@ -60,9 +60,9 @@ class Manifest
                 'ticker_integration_id' => $p['ticker_integration_id'] !== null ? (int)$p['ticker_integration_id'] : null,
                 'ticker_text' => $p['ticker_text'],
                 'music_integration_id' => $p['music_integration_id'] !== null ? (int)$p['music_integration_id'] : null,
+                'footer' => Footer::resolve($orgId, $p, $integrationIds),
                 'items' => [],
             ];
-            if ($p['ticker_integration_id']) $integrationIds[] = (int)$p['ticker_integration_id'];
             if ($p['music_integration_id']) $integrationIds[] = (int)$p['music_integration_id'];
         }
         if (!$playlists) return [];

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Shield, Building2, Users, Tv, HardDrive, PlayCircle, Wifi, Pencil, LogIn, KeyRound, Ban, CheckCircle2 } from 'lucide-react'
+import { Smartphone, Shield, Building2, Users, Tv, HardDrive, PlayCircle, Wifi, Pencil, LogIn, KeyRound, Ban, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
+import AppReleases from './AppReleases'
 import { useAuth } from '../lib/auth'
 import { useDebounced, useFetch } from '../lib/hooks'
 import { formatBytes, formatDate, timeAgo } from '../lib/format'
@@ -25,8 +26,8 @@ export default function AdminPage() {
           <Stat label="Exibições 24h" value={stats.plays_24h.toLocaleString('pt-BR')} icon={PlayCircle} color="green" />
         </div>
       ) : <PageLoader />}
-      <Tabs className="mb-5 w-fit" value={tab} onChange={setTab} tabs={[{ value: 'orgs', label: 'Organizações', icon: Building2 }, { value: 'users', label: 'Usuários', icon: Users }]} />
-      {tab === 'orgs' ? <Orgs /> : <UsersTab />}
+      <Tabs className="mb-5 w-fit" value={tab} onChange={setTab} tabs={[{ value: 'orgs', label: 'Organizações', icon: Building2 }, { value: 'users', label: 'Usuários', icon: Users }, { value: 'app', label: 'App da TV', icon: Smartphone }]} />
+      {tab === 'orgs' ? <Orgs /> : tab === 'users' ? <UsersTab /> : <AppReleases />}
     </div>
   )
 }

@@ -34,6 +34,11 @@ class ScreenController
                 'user_agent' => $info['user_agent'] ?? null,
                 'player_version' => $info['version'] ?? null,
             ],
+            // App CloudiMídia Player (Android): estatísticas e captura de tela
+            'is_app' => str_starts_with((string)($info['version'] ?? ''), 'app-'),
+            'diagnostics' => decode_json($s['diagnostics'] ?? null, null),
+            'screenshot_url' => !empty($s['screenshot_path']) ? upload_url($s['screenshot_path']) . '?t=' . strtotime($s['screenshot_at'] . ' UTC') : null,
+            'screenshot_at' => $s['screenshot_at'] ?? null,
             'groups' => $groups[$id] ?? [],
             'can_operate' => $ctx->canOperateScreen($id),
             'guest_role' => $ctx->screens[$id] ?? null,
@@ -306,7 +311,12 @@ class ScreenController
         $screen = self::find($ctx, $id);
         if (!$ctx->canOperateScreen((int)$screen['id'])) abort('Você não tem permissão para operar esta TV.', 403);
         $cmd = str_input('command', 30);
-        $labels = ['reload' => 'Recarregar', 'identify' => 'Identificar', 'refresh' => 'Atualizar conteúdo', 'clear_cache' => 'Limpar cache'];
+        $labels = [
+            'reload' => 'Recarregar', 'identify' => 'Identificar', 'refresh' => 'Atualizar conteúdo', 'clear_cache' => 'Limpar cache',
+            // comandos executados pelo app da TV
+            'screenshot' => 'Capturar tela', 'restart_app' => 'Reiniciar app', 'update_app' => 'Atualizar app', 'update_player' => 'Atualizar player',
+            'sync_media' => 'Baixar mídias', 'clear_media' => 'Apagar mídias salvas', 'autostart_on' => 'Ativar abertura automática', 'autostart_off' => 'Desativar abertura automática',
+        ];
         if (!isset($labels[$cmd])) abort('Comando inválido.', 422);
         DB::exec('UPDATE screen_commands SET delivered_at = ? WHERE screen_id = ? AND command = ? AND delivered_at IS NULL', [now(), $screen['id'], $cmd]);
         DB::insert('screen_commands', ['screen_id' => $screen['id'], 'command' => $cmd, 'created_by' => $ctx->userId(), 'created_at' => now()]);

@@ -5,6 +5,7 @@ import {
   Cpu, Clock, MapPin, ListVideo, Replace, Users, PlayCircle, Radio, PlugZap, Link2, KeyRound,
 } from 'lucide-react'
 import InstallLinkModal from '../../components/InstallLink'
+import AppDevicePanel from '../../components/AppDevicePanel'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useFetch } from '../../lib/hooks'
@@ -238,6 +239,7 @@ export default function ScreenDetail() {
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-span-2">
+          {screen.is_app && <AppDevicePanel screen={screen} onReload={reload} />}
           <Card>
             <CardTitle icon={Cpu}>Informações</CardTitle>
             <dl className="space-y-3 text-sm">

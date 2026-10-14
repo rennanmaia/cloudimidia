@@ -1,5 +1,7 @@
 Options -Indexes -ExecCGI
 
+AddType application/vnd.android.package-archive .apk
+
 # Arquivos enviados nunca são executados como script
 <FilesMatch "\.(php\d?|phtml|phar|pl|py|cgi|sh|html?|svg|js)$">
     Require all denied
@@ -8,4 +10,11 @@ Options -Indexes -ExecCGI
     Header set X-Content-Type-Options "nosniff"
     Header set Cache-Control "public, max-age=2592000"
     Header set Access-Control-Allow-Origin "*"
+    <FilesMatch "\.apk$">
+        Header set Content-Disposition "attachment"
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+    <FilesMatch "^screen_\d+\.jpg$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
 </IfModule>

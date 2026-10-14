@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS playlists (
   ticker_integration_id INT UNSIGNED NULL,
   ticker_text VARCHAR(1000) NULL,
   music_integration_id INT UNSIGNED NULL,
+  footer TEXT NULL,
   created_by INT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
@@ -161,6 +162,9 @@ CREATE TABLE IF NOT EXISTS screens (
   install_token_hash CHAR(64) NULL,
   install_expires_at DATETIME NULL,
   device_info TEXT NULL,
+  diagnostics TEXT NULL,
+  screenshot_path VARCHAR(255) NULL,
+  screenshot_at DATETIME NULL,
   last_seen_at DATETIME NULL,
   last_ip VARCHAR(45) NULL,
   now_playing VARCHAR(255) NULL,
@@ -299,6 +303,18 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   KEY ix_activity_org (organization_id, created_at),
   CONSTRAINT fk_activity_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
   CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS app_releases (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  version_code INT NOT NULL,
+  version_name VARCHAR(40) NOT NULL,
+  file_path VARCHAR(255) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  notes VARCHAR(1000) NULL,
+  created_by INT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_app_releases_code (version_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { MonitorPlay, Maximize, Smartphone, Wifi, WifiOff } from 'lucide-react'
-import { API_BASE, APP_BASE } from '../lib/api'
+import { API_BASE, APP_BASE, RUNTIME } from '../lib/api'
 import Stage from './Stage'
 
-const VERSION = 'web-1.0.0'
+/** Rodando dentro do app CloudiMídia Player (Android)? */
+const NATIVE = !!(RUNTIME?.native && window.ReactNativeWebView)
+const VERSION = NATIVE ? `app-${RUNTIME.appVersion || '?'}` : 'web-1.0.0'
+/** Comandos do painel executados pelo app (não pelo navegador) */
+const NATIVE_COMMANDS = ['screenshot', 'restart_app', 'update_app', 'update_player', 'sync_media', 'clear_media', 'autostart_on', 'autostart_off']
 const LS = {
   key: 'cm_device_key',
   token: 'cm_device_token',
@@ -13,6 +17,44 @@ const LS = {
 const store = {
   get: (k) => { try { return localStorage.getItem(k) } catch { return null } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* */ } },
+}
+
+/* ---------------- Ponte com o app ---------------- */
+const bridge = {
+  diag: null,
+  post(msg) {
+    if (!NATIVE) return
+    try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)) } catch { /* */ }
+  },
+}
+if (NATIVE) {
+  window.__cmNative = {
+    diag: (d) => { bridge.diag = d },
+    ping: (n) => bridge.post({ type: 'pong', n }),
+    unpair: () => { store.set(LS.token, null); store.set(LS.manifest, null); window.location.reload() },
+  }
+}
+
+/**
+ * No app, as mídias passam pelo servidor local do aparelho (cache em disco),
+ * o que permite exibir tudo sem internet. Retorna também a lista de mídias para baixar.
+ */
+function localizeManifest(m) {
+  if (!m || !NATIVE || !RUNTIME.cacheBase) return { manifest: m, media: [] }
+  const media = new Set()
+  const loc = (u) => {
+    if (!u || !/^https?:\/\//.test(u)) return u
+    media.add(u)
+    return RUNTIME.cacheBase + encodeURIComponent(u)
+  }
+  const copy = JSON.parse(JSON.stringify(m))
+  if (copy.organization) copy.organization.logo_url = loc(copy.organization.logo_url)
+  for (const p of Object.values(copy.playlists || {})) {
+    for (const it of p.items || []) if (it.media) { it.media.url = loc(it.media.url); it.media.thumb_url = loc(it.media.thumb_url) }
+    for (const sl of p.footer?.slots || []) if (sl.media) sl.media.url = loc(sl.media.url)
+  }
+  for (const i of Object.values(copy.integrations || {})) for (const t of i.tracks || []) t.url = loc(t.url)
+  return { manifest: copy, media: [...media] }
 }
 
 function deviceKey() {
@@ -60,6 +102,7 @@ function Pairing({ onPaired }) {
     let alive = true
     let timer
     const key = deviceKey()
+    bridge.post({ type: 'status', paired: false, token: null, online: true, screenName: null })
     const register = async () => {
       try {
         const r = await call('player/register', { method: 'POST', body: { device_key: key, info: deviceInfo() } })
@@ -114,6 +157,7 @@ function Pairing({ onPaired }) {
           <p style={S.hint}>
             {error ? <><WifiOff size="2.2vmin" style={{ verticalAlign: '-0.3vmin' }} /> Sem conexão com o servidor. Tentando novamente…</> : <><Wifi size="2.2vmin" style={{ verticalAlign: '-0.3vmin' }} /> Aguardando cadastro… a tela muda sozinha.</>}
           </p>
+          {NATIVE && <p style={{ ...S.hint, color: '#94a3b8', marginTop: '1.4vmin' }}>Menu de manutenção: segure OK no controle por 2 segundos.</p>}
         </div>
         <div style={S.qrBox}>
           {qr ? <img src={qr} alt="QR Code" style={{ width: '100%', display: 'block', borderRadius: '1.5vmin' }} /> : <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>…</div>}
@@ -121,9 +165,11 @@ function Pairing({ onPaired }) {
           {pairUrl && <p style={{ ...S.qrText, fontSize: '1.5vmin', opacity: 0.5, marginTop: '0.5vmin' }}>Código válido por 1 hora</p>}
         </div>
       </div>
-      <button type="button" style={S.fsBtn} onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
+      {!NATIVE && (
+        <button type="button" style={S.fsBtn} onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
         <Maximize size="2.2vmin" /> Tela cheia
       </button>
+      )}
     </div>
   )
 }
@@ -156,10 +202,11 @@ function Runtime({ token, onUnpaired }) {
   const heartbeat = useCallback(async () => {
     const sending = logs.current.splice(0, 200)
     try {
-      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, info: deviceInfo() } })
+      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, info: deviceInfo(), native: bridge.diag } })
       setOnline(true)
       if (r.version !== versionRef.current) fetchManifest()
       for (const c of r.commands || []) {
+        if (NATIVE_COMMANDS.includes(c.command)) bridge.post({ type: 'command', command: c.command })
         if (c.command === 'reload') setTimeout(() => window.location.reload(), 500)
         if (c.command === 'identify') { setIdentify(true); setTimeout(() => setIdentify(false), 12000) }
         if (c.command === 'refresh') fetchManifest()
@@ -190,6 +237,13 @@ function Runtime({ token, onUnpaired }) {
   }, [fetchManifest, heartbeat])
 
   const fetchData = useCallback((id) => call(`player/integrations/${id}`, { token }), [token])
+
+  // App: mídias pelo cache local + estado para o menu de manutenção
+  const view = useMemo(() => localizeManifest(manifest), [manifest])
+  useEffect(() => { if (view.media.length) bridge.post({ type: 'manifest', media: view.media }) }, [view])
+  useEffect(() => {
+    bridge.post({ type: 'status', paired: true, token, online, screenName: manifest?.screen?.name || null })
+  }, [token, online, manifest?.screen?.name])
   const onPlayed = useCallback((log) => { logs.current.push(log); if (logs.current.length > 2000) logs.current.shift() }, [])
   const onNowPlaying = useCallback((name) => { nowPlaying.current = name || '' }, [])
 
@@ -207,7 +261,7 @@ function Runtime({ token, onUnpaired }) {
     <div style={S.full}>
       <div style={wrapStyle}>
         {manifest.screen?.is_active ? (
-          <Stage manifest={manifest} fetchData={fetchData} onPlayed={onPlayed} onNowPlaying={onNowPlaying} identify={identify} />
+          <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onNowPlaying={onNowPlaying} identify={identify} />
         ) : (
           <div className="cm-stage cm-off">
             {identify && <div className="cm-identify"><small>Esta TV é</small><b>{manifest.screen?.name}</b></div>}
@@ -295,6 +349,19 @@ export default function PlayerApp() {
       window.removeEventListener('keydown', unlock)
       window.removeEventListener('click', unlock)
     }
+  }, [])
+
+  // Aparelhos com toque: 5 toques rápidos abrem o menu de manutenção do app
+  useEffect(() => {
+    if (!NATIVE) return
+    let taps = []
+    const onTap = () => {
+      const now = Date.now()
+      taps = [...taps.filter((t) => now - t < 3000), now]
+      if (taps.length >= 5) { taps = []; bridge.post({ type: 'open_menu' }) }
+    }
+    window.addEventListener('pointerdown', onTap)
+    return () => window.removeEventListener('pointerdown', onTap)
   }, [])
 
   const onPaired = useCallback((t) => { store.set(LS.token, t); setToken(t) }, [])

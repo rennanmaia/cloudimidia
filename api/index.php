@@ -111,6 +111,10 @@ try {
     $r->post('player/register', [PlayerController::class, 'register']);
     $r->post('player/poll', [PlayerController::class, 'poll']);
     $r->post('player/install', [PlayerController::class, 'install']);
+    $r->post('player/screenshot', [PlayerController::class, 'screenshot']);
+    $r->get('player/bundle', [PlayerController::class, 'bundle']);
+    $r->get('player/app', [PlayerController::class, 'app']);
+    $r->get('player/app/download', [PlayerController::class, 'appDownload']);
     $r->get('player/manifest', [PlayerController::class, 'manifest']);
     $r->post('player/heartbeat', [PlayerController::class, 'heartbeat']);
     $r->get('player/integrations/{id}', [PlayerController::class, 'integration']);
@@ -121,6 +125,9 @@ try {
     $r->put('admin/orgs/{id}', [AdminController::class, 'updateOrg']);
     $r->get('admin/users', [AdminController::class, 'users']);
     $r->put('admin/users/{id}', [AdminController::class, 'updateUser']);
+    $r->get('admin/releases', [AdminController::class, 'releases']);
+    $r->post('admin/releases/upload', [AdminController::class, 'uploadRelease']);
+    $r->delete('admin/releases/{id}', [AdminController::class, 'deleteRelease']);
 
     Migrations::run();
     $r->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $route);

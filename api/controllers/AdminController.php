@@ -55,6 +55,87 @@ class AdminController
         respond(['ok' => true]);
     }
 
+    /* ---------------- Versões do app da TV ---------------- */
+
+    public static function releases(): void
+    {
+        Auth::requireSuperadmin();
+        $rows = DB::all('SELECT r.*, u.name AS creator_name FROM app_releases r LEFT JOIN users u ON u.id = r.created_by ORDER BY r.version_code DESC');
+        $installs = DB::all("SELECT JSON_UNQUOTE(JSON_EXTRACT(diagnostics, '$.app_version_code')) AS code, COUNT(*) AS n FROM screens WHERE diagnostics IS NOT NULL GROUP BY code");
+        respond([
+            'releases' => array_map(fn($r) => [
+                'id' => (int)$r['id'],
+                'version_code' => (int)$r['version_code'],
+                'version_name' => $r['version_name'],
+                'url' => upload_url($r['file_path']),
+                'size_bytes' => (int)$r['size_bytes'],
+                'notes' => $r['notes'],
+                'creator_name' => $r['creator_name'],
+                'created_at' => $r['created_at'],
+            ], $rows),
+            'installs' => array_map(fn($i) => ['version_code' => (int)$i['code'], 'screens' => (int)$i['n']], $installs),
+            'download_url' => app_url('api/player/app/download'),
+        ]);
+    }
+
+    /** Envio do .apk em partes (mesmo protocolo das mídias). */
+    public static function uploadRelease(): void
+    {
+        $me = Auth::requireSuperadmin();
+        $uploadId = preg_replace('/[^a-zA-Z0-9]/', '', (string)input('upload_id', ''));
+        if (strlen($uploadId) < 8) abort('Envio inválido.', 422);
+        if (!preg_match('/\.apk$/i', (string)input('name', ''))) abort('Envie o arquivo .apk do aplicativo.', 422);
+        $index = (int)input('chunk_index', 0);
+        $total = max(1, (int)input('total_chunks', 1));
+        $file = $_FILES['file'] ?? null;
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) abort('Falha ao receber o arquivo.', 422);
+        if ((int)input('total_size', 0) > 300 * 1024 * 1024) abort('Arquivo muito grande.', 422);
+
+        $tmpDir = STORAGE_DIR . '/tmp';
+        ensure_dir($tmpDir);
+        $part = $tmpDir . '/apk_' . $me['id'] . '_' . $uploadId . '.part';
+        if ($index > 0 && !is_file($part)) abort('Envio não encontrado. Recomece.', 422);
+        $out = fopen($part, $index === 0 ? 'wb' : 'ab');
+        $in = fopen($file['tmp_name'], 'rb');
+        stream_copy_to_stream($in, $out);
+        fclose($in);
+        fclose($out);
+        if ($index < $total - 1) respond(['received' => $index + 1]);
+
+        try {
+            $code = (int)input('version_code', 0);
+            $name = mb_substr(trim((string)input('version_name', '')), 0, 40);
+            if ($code <= 0 || $name === '') abort('Informe a versão (nome e número).', 422);
+            if (DB::val('SELECT id FROM app_releases WHERE version_code = ?', [$code])) abort("Já existe uma versão com o número $code.", 422);
+            if (file_get_contents($part, false, null, 0, 2) !== 'PK') abort('O arquivo enviado não é um .apk válido.', 422);
+            $rel = 'app/cloudimidia-player-' . preg_replace('/[^0-9A-Za-z.\-]/', '', $name) . '-' . $code . '.apk';
+            ensure_dir(UPLOAD_DIR . '/app');
+            if (!rename($part, UPLOAD_DIR . '/' . $rel)) abort('Não foi possível salvar o arquivo.', 500);
+            DB::insert('app_releases', [
+                'version_code' => $code,
+                'version_name' => $name,
+                'file_path' => $rel,
+                'size_bytes' => filesize(UPLOAD_DIR . '/' . $rel),
+                'notes' => mb_substr(trim((string)input('notes', '')), 0, 1000) ?: null,
+                'created_by' => $me['id'],
+                'created_at' => now(),
+            ]);
+        } finally {
+            if (is_file($part)) @unlink($part);
+        }
+        respond(['ok' => true], 201);
+    }
+
+    public static function deleteRelease($id): void
+    {
+        Auth::requireSuperadmin();
+        $r = DB::one('SELECT * FROM app_releases WHERE id = ?', [(int)$id]);
+        if (!$r) abort('Versão não encontrada.', 404);
+        DB::exec('DELETE FROM app_releases WHERE id = ?', [$r['id']]);
+        delete_upload($r['file_path']);
+        respond(['ok' => true]);
+    }
+
     public static function users(): void
     {
         Auth::requireSuperadmin();

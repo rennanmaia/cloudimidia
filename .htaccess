@@ -5,7 +5,7 @@ DirectoryIndex disabled
     RewriteEngine On
 
     # Pastas internas nunca são servidas
-    RewriteRule ^(frontend|database|storage|node_modules|\.git)(/|$) - [F,L]
+    RewriteRule ^(frontend|app|database|storage|node_modules|\.git)(/|$) - [F,L]
     RewriteRule (^|/)\.(?!well-known) - [F,L]
 
     # Painel (SPA)

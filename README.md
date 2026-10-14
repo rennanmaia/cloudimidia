@@ -15,7 +15,8 @@ Sistema web para gerenciar TVs de **mídia indoor**, **TV corporativa** e conte�
 | **TVs** | Cadastro por **código de 6 dígitos ou QR Code**, ligar/desligar, som, rotação (TV em pé), playlist padrão, status online em tempo real, “exibindo agora”, comandos remotos (identificar, atualizar, reiniciar), troca de aparelho, prévia ao vivo. |
 | **Grupos (segmentação)** | Agrupe TVs (por local, cliente, público) e programe o grupo inteiro de uma vez. |
 | **Mídias** | Fotos, vídeos e músicas. Envio em partes (arquivos grandes e 4G), miniaturas e duração geradas no navegador. |
-| **Playlists** | Arrastar e soltar (funciona no toque), duração por item, preencher/mostrar inteira, som do vídeo, transições, rodapé de notícias/avisos, música ambiente, prévia. |
+| **Playlists** | Arrastar e soltar (funciona no toque), duração por item, preencher/mostrar inteira, som do vídeo, transições, música ambiente, prévia. |
+| **Barra inferior** | Faixa configurável por playlist: logo, imagem fixa (patrocinador), notícias rolando, mensagens, previsão do tempo, relógio, cotações e placar — em qualquer ordem, com modelos prontos, altura, cores, velocidade e prévia ao vivo. |
 | **Programação (grade)** | Por dia da semana, horário (inclusive atravessando a meia-noite), período de datas e prioridade. **Campanhas intercaladas**: anúncios inseridos a cada N itens da programação. Visão em lista e grade semanal. |
 | **Integrações** | Notícias (RSS — g1, Folha, BBC…), previsão do tempo (Open-Meteo), resultados de jogos (Brasileirão, Libertadores, Champions, NBA…), cotações (dólar, euro, bitcoin), relógio, avisos, página web, YouTube, música ambiente (rádio online ou biblioteca). |
 | **Relatórios** | Comprovação de exibição por conteúdo, por TV e por dia; exportação CSV para enviar ao anunciante. |
@@ -34,6 +35,10 @@ O player continua exibindo a última programação recebida se a internet cair, 
 4. Acesse **http://localhost/cloudimidia** — na primeira vez aparece a **Configuração inicial**, que cria as tabelas e a conta de administrador da plataforma.
 
 > O build do painel já está em `public/`. Só é preciso Node.js para alterar o frontend.
+
+## App para TV (Android)
+
+Para locais difíceis de visitar, use o **CloudiMídia Player** (pasta [`app/`](app/README.md)): abre sozinho ao ligar, reabre se fechar, exibe sem internet (mídias salvas no aparelho), aceita comandos remotos (captura de tela, reiniciar, atualizar) e envia estatísticas do aparelho para o painel. As versões são publicadas em **Plataforma → App da TV**.
 
 ## Ligando uma TV
 

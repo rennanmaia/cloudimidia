@@ -125,6 +125,8 @@ class PlayerController
         ];
         $info = self::deviceInfo();
         if ($info) $data['device_info'] = $info;
+        $native = self::nativeDiagnostics();
+        if ($native) $data['diagnostics'] = $native;
         DB::update('screens', $data, 'id = ?', [$sid]);
 
         // Registro de exibições (comprovação para anunciantes)
@@ -158,6 +160,83 @@ class PlayerController
             'screen_name' => $screen['name'],
             'server_time' => gmdate('c'),
         ]);
+    }
+
+    /** Estatísticas enviadas pelo app da TV (lista fechada de campos, tamanho limitado). */
+    private static function nativeDiagnostics(): ?string
+    {
+        $d = input('native');
+        if (!is_array($d)) return null;
+        $keys = ['app_version', 'app_version_code', 'player_version', 'android', 'model', 'webview', 'mem_total', 'mem_free', 'mem_low',
+            'storage_total', 'storage_free', 'cache_files', 'cache_bytes', 'cache_downloading', 'cache_missing', 'uptime', 'app_uptime',
+            'autostart', 'can_autostart', 'home_app', 'can_install', 'network', 'wifi_signal', 'wifi_rssi', 'ip'];
+        $out = [];
+        foreach ($keys as $k) {
+            if (isset($d[$k]) && is_scalar($d[$k])) $out[$k] = is_string($d[$k]) ? mb_substr($d[$k], 0, 120) : $d[$k];
+        }
+        if (isset($d['events']) && is_array($d['events'])) {
+            $out['events'] = array_values(array_map(fn($e) => mb_substr((string)$e, 0, 300), array_filter(array_slice($d['events'], -10), 'is_scalar')));
+        }
+        $out['reported_at'] = gmdate('c');
+        return json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** Captura de tela enviada pelo app (JPEG em base64). */
+    public static function screenshot(): void
+    {
+        $screen = self::screen();
+        $b64 = (string)input('image', '');
+        if (strlen($b64) > 4 * 1024 * 1024) abort('Imagem muito grande.', 422);
+        $bin = base64_decode($b64, true);
+        if ($bin === false || substr($bin, 0, 3) !== "\xFF\xD8\xFF") abort('Imagem inválida.', 422);
+        $rel = 'org_' . $screen['organization_id'] . '/screens/screen_' . $screen['id'] . '.jpg';
+        ensure_dir(dirname(UPLOAD_DIR . '/' . $rel));
+        file_put_contents(UPLOAD_DIR . '/' . $rel, $bin);
+        DB::update('screens', ['screenshot_path' => $rel, 'screenshot_at' => now()], 'id = ?', [$screen['id']]);
+        respond(['ok' => true]);
+    }
+
+    /** Arquivos do player para o app baixar e usar offline (versão = hash do tv.html). */
+    public static function bundle(): void
+    {
+        $public = APP_ROOT . '/public';
+        if (!is_file($public . '/tv.html')) abort('Player não encontrado.', 404);
+        $files = [['path' => 'tv.html', 'url' => app_url('tv')]];
+        if (is_file($public . '/favicon.svg')) $files[] = ['path' => 'favicon.svg', 'url' => app_url('favicon.svg')];
+        foreach (glob($public . '/assets/*') ?: [] as $f) {
+            $name = basename($f);
+            $files[] = ['path' => 'assets/' . $name, 'url' => app_url('assets/' . rawurlencode($name))];
+        }
+        respond(['version' => substr(md5_file($public . '/tv.html'), 0, 12), 'files' => $files]);
+    }
+
+    public static function latestRelease(): ?array
+    {
+        $r = DB::one('SELECT * FROM app_releases ORDER BY version_code DESC LIMIT 1');
+        if (!$r) return null;
+        return [
+            'version_code' => (int)$r['version_code'],
+            'version_name' => $r['version_name'],
+            'url' => upload_url($r['file_path']),
+            'size_bytes' => (int)$r['size_bytes'],
+            'notes' => $r['notes'],
+            'created_at' => $r['created_at'],
+        ];
+    }
+
+    /** Versão mais recente do app (consultada pelo próprio app). */
+    public static function app(): void
+    {
+        respond(['release' => self::latestRelease()]);
+    }
+
+    /** Link fixo para baixar o app (para instalar em aparelhos novos). */
+    public static function appDownload(): void
+    {
+        $r = self::latestRelease();
+        if (!$r) abort('Nenhuma versão do app foi publicada ainda.', 404);
+        header('Location: ' . $r['url'], true, 302);
+        exit;
     }
 
     public static function integration($id): void

@@ -38,6 +38,7 @@ require __DIR__ . '/Router.php';
 require __DIR__ . '/Integrations.php';
 require __DIR__ . '/Manifest.php';
 require __DIR__ . '/Migrations.php';
+require __DIR__ . '/Footer.php';
 
 spl_autoload_register(function (string $class) {
     $file = API_ROOT . '/controllers/' . $class . '.php';

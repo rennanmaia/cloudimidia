@@ -1,6 +1,9 @@
-// Endereço da API: em desenvolvimento usa o proxy do Vite; em produção, a pasta api/ ao lado do build
-export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/' : new URL('../api/', import.meta.url).href)
-export const APP_BASE = new URL('../', API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE).href
+// Configuração injetada pelo app da TV (CloudiMídia Player), quando o player roda dentro dele
+export const RUNTIME = (typeof window !== 'undefined' && window.__CM_CONFIG__) || null
+
+// Endereço da API: app da TV > variável de build > proxy do Vite (dev) > pasta api/ ao lado do build
+export const API_BASE = RUNTIME?.apiBase || import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/' : new URL('../api/', import.meta.url).href)
+export const APP_BASE = RUNTIME?.appBase || new URL('../', API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE).href
 
 // Endereço que deve ser aberto no navegador da TV
 export const TV_URL = import.meta.env.DEV ? `${window.location.origin}/tv.html` : `${APP_BASE}tv`
@@ -56,7 +59,8 @@ export const api = {
 }
 
 /** Envio de arquivo em partes, com progresso (0..1). */
-export function uploadChunked(orgId, file, { meta = {}, thumbnail, onProgress, chunkSize = 4 * 1024 * 1024 } = {}) {
+export function uploadChunked(orgId, file, { meta = {}, thumbnail, onProgress, chunkSize = 4 * 1024 * 1024, endpoint } = {}) {
+  const target = endpoint || `orgs/${orgId}/media/upload`
   const uploadId = (crypto.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, '')
   const total = Math.max(1, Math.ceil(file.size / chunkSize))
   let cancelled = false
@@ -77,7 +81,7 @@ export function uploadChunked(orgId, file, { meta = {}, thumbnail, onProgress, c
       if (thumbnail) fd.append('thumbnail', thumbnail, 'thumb.jpg')
     }
     xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE}orgs/${orgId}/media/upload`)
+    xhr.open('POST', `${API_BASE}${target}`)
     const token = getToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.upload.onprogress = (e) => {

@@ -17,6 +17,9 @@ ErrorDocument 500 default
     RewriteRule ^$ public/index.html [END]
     RewriteRule ^index\.html$ public/index.html [END]
 
+    # Download do app da TV (endereço curto para digitar no aparelho)
+    RewriteRule ^app/?$ api/index.php?_route=player/app/download [END]
+
     # Player da TV
     RewriteRule ^tv/?$ public/tv.html [END]
     RewriteRule ^tv/(assets/.+)$ public/$1 [END]

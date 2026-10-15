@@ -9,6 +9,9 @@ ErrorDocument 500 default
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Download do app da TV (endereço curto para digitar no aparelho)
+    RewriteRule ^app/?$ api/index.php?_route=player/app/download [END]
+
     # Pastas internas nunca são servidas
     RewriteRule ^(frontend|app|database|storage|node_modules|\.git)(/|$) - [F,L]
     RewriteRule (^|/)\.(?!well-known) - [F,L]
@@ -16,9 +19,6 @@ ErrorDocument 500 default
     # Painel (SPA)
     RewriteRule ^$ public/index.html [END]
     RewriteRule ^index\.html$ public/index.html [END]
-
-    # Download do app da TV (endereço curto para digitar no aparelho)
-    RewriteRule ^app/?$ api/index.php?_route=player/app/download [END]
 
     # Player da TV
     RewriteRule ^tv/?$ public/tv.html [END]

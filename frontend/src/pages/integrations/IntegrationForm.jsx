@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Search, MapPin, CheckCircle2, Music, Radio, Library, Plus, X, FlaskConical } from 'lucide-react'
+import { Search, MapPin, CheckCircle2, Music, Radio, Library, Plus, X, FlaskConical, KeyRound } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useDebounced } from '../../lib/hooks'
-import { INTEGRATION_TYPES, RSS_PRESET_GROUPS, CURRENCY_OPTIONS } from '../../lib/integrationTypes'
+import { INTEGRATION_TYPES, REMOTE_TYPES, RSS_PRESET_GROUPS, CURRENCY_OPTIONS } from '../../lib/integrationTypes'
+import { useNavigate } from 'react-router-dom'
 import { useToast } from '../../components/feedback'
 import { Button, ColorPicker, Field, Input, Modal, Segmented, Select, Textarea, Toggle, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
@@ -18,6 +19,7 @@ const DEFAULT_CONFIG = {
   text: { title: '', message: '', background: '#4f46e5', color: '#ffffff', align: 'center', size: 'lg' },
   webpage: { url: '', reload_minutes: 0 },
   youtube: { url: '', muted: true },
+  futdigital: { competition_id: 0, competition_name: '', views: ['live', 'today'], max_matches: 12, per_page: 6, page_duration: 10, title: '' },
   music: { source: 'stream', stream_url: '', media_ids: [], volume: 60, shuffle: true },
 }
 
@@ -75,6 +77,81 @@ function CitySearch({ value, onSelect }) {
   )
 }
 
+const FD_VIEWS = [
+  ['live', 'Ao vivo', 'Jogos acontecendo agora, com o minuto', false],
+  ['today', 'Jogos de hoje', 'Agenda e resultados do dia', false],
+  ['results', 'Últimos resultados', 'Jogos encerrados mais recentes', true],
+  ['upcoming', 'Próximos jogos', 'Agenda das próximas partidas', true],
+  ['standings', 'Classificação', 'Tabela (por grupo, quando houver)', true],
+  ['scorers', 'Artilharia', 'Goleadores do campeonato', true],
+]
+
+/** Campos da integração FutDigital (a chave fica em Configurações → Chaves de integrações). */
+function FutDigitalFields({ config, set }) {
+  const { orgId, can } = useAuth()
+  const navigate = useNavigate()
+  const [state, setState] = useState({ loading: true, configured: false, competitions: [], error: null })
+  useEffect(() => {
+    api.get(`orgs/${orgId}/futdigital/competitions`)
+      .then((d) => setState({ loading: false, configured: d.configured, competitions: d.competitions, error: null }))
+      .catch((e) => setState({ loading: false, configured: true, competitions: [], error: e.message }))
+  }, [orgId])
+
+  if (state.loading) return <p className="text-sm text-slate-500">Consultando o FutDigital…</p>
+  if (!state.configured) {
+    return (
+      <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+        <p className="font-semibold">Falta a chave do FutDigital</p>
+        <p className="mt-1">{can('admin') ? 'Cadastre a chave de parceiro em Configurações → Chaves de integrações.' : 'Peça a um administrador para cadastrar a chave de parceiro em Configurações.'}</p>
+        {can('admin') && <Button size="sm" className="mt-3" icon={KeyRound} onClick={() => navigate('/configuracoes')}>Cadastrar chave</Button>}
+      </div>
+    )
+  }
+  const cid = Number(config.competition_id) || 0
+  const toggleView = (v) => set({ views: config.views.includes(v) ? config.views.filter((x) => x !== v) : [...config.views, v] })
+  return (
+    <div className="space-y-4">
+      {state.error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">{state.error}</p>}
+      <Field label="Campeonato">
+        <Select
+          value={cid}
+          onChange={(e) => {
+            const id = Number(e.target.value)
+            const c = state.competitions.find((x) => x.id === id)
+            set({ competition_id: id, competition_name: c?.name.replace(/\s+/g, ' ').trim() || '', views: id ? ['live', 'today', 'results', 'upcoming', 'standings'] : ['live', 'today'] }, c ? c.name.replace(/\s+/g, ' ').trim() : 'FutDigital - Jogos de hoje')
+          }}
+        >
+          <option value={0}>Todos os campeonatos (jogos de hoje e ao vivo)</option>
+          {state.competitions.map((c) => <option key={c.id} value={c.id}>{c.name.replace(/\s+/g, ' ')}{c.city ? ` — ${c.city}` : ''}{c.status === 'scheduled' ? ' (em breve)' : ''}</option>)}
+        </Select>
+      </Field>
+      <Field label="Páginas exibidas" hint="Páginas sem jogos no momento são puladas automaticamente.">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {FD_VIEWS.map(([v, label, desc, needsComp]) => {
+            const disabled = needsComp && !cid
+            const on = config.views.includes(v) && !disabled
+            return (
+              <button key={v} type="button" disabled={disabled} onClick={() => toggleView(v)} className={cn('rounded-xl px-3 py-2 text-left ring-1 transition disabled:opacity-40', on ? 'bg-lime-50 ring-lime-400' : 'ring-slate-200 hover:bg-slate-50')}>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">{on && <CheckCircle2 className="size-4 text-lime-600" />}{label}</span>
+                <span className="block text-xs text-slate-500">{disabled ? 'Escolha um campeonato' : desc}</span>
+              </button>
+            )
+          })}
+        </div>
+      </Field>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Jogos por lista"><Input type="number" min={2} max={40} value={config.max_matches} onChange={(e) => set({ max_matches: Number(e.target.value) })} /></Field>
+        <Field label="Jogos por página">
+          <Select value={config.per_page} onChange={(e) => set({ per_page: Number(e.target.value) })}><option value={4}>4</option><option value={6}>6</option><option value={8}>8</option></Select>
+        </Field>
+        <Field label="Segundos por página"><Input type="number" min={5} max={60} value={config.page_duration} onChange={(e) => set({ page_duration: Number(e.target.value) })} /></Field>
+      </div>
+      <Field label="Título na tela" optional><Input value={config.title} onChange={(e) => set({ title: e.target.value })} placeholder={config.competition_name || 'FutDigital'} /></Field>
+      <p className="text-xs text-slate-500">Na playlist, deixe a duração em branco para a TV mostrar todas as páginas e seguir para o próximo item.</p>
+    </div>
+  )
+}
+
 function ConfigFields({ type, config, set, leagues }) {
   const [picker, setPicker] = useState(false)
   const [tracks, setTracks] = useState([])
@@ -82,6 +159,8 @@ function ConfigFields({ type, config, set, leagues }) {
   const urls = config.urls?.length ? config.urls : [config.url || '']
   const setUrls = (list) => set({ urls: list, url: list[0] || '' })
   switch (type) {
+    case 'futdigital':
+      return <FutDigitalFields config={config} set={set} />
     case 'rss':
       return (
         <div className="space-y-4">
@@ -301,7 +380,7 @@ export default function IntegrationForm({ open, onClose, integration, presetType
   }
 
   const T = type ? INTEGRATION_TYPES[type] : null
-  const remote = ['rss', 'weather', 'sports', 'currency'].includes(type)
+  const remote = REMOTE_TYPES.includes(type)
   const localPreview = ['clock', 'text'].includes(type)
 
   return (
@@ -344,6 +423,7 @@ export default function IntegrationForm({ open, onClose, integration, presetType
               {type === 'rss' && <ul className="list-disc space-y-0.5 pl-5">{test.items.slice(0, 3).map((i, k) => <li key={k}>{i.title}</li>)}</ul>}
               {type === 'weather' && <p>{test.city}: {test.current.temp}°C agora</p>}
               {type === 'sports' && <p>{test.league}: {test.events.length} jogos encontrados</p>}
+              {type === 'futdigital' && <p>{test.title}: {test.sections.length ? test.sections.map((x) => x.title).join(', ') : 'sem jogos no momento'}</p>}
               {type === 'currency' && <p>{test.quotes.map((q) => `${q.code} R$ ${q.bid.toFixed(2)}`).join(' · ')}</p>}
             </div>
           )}

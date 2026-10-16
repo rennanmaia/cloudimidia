@@ -5,6 +5,7 @@ import {
   useIntegrationData, loadIntegrationData,
 } from './widgets'
 import Footer from './Footer'
+import FutDigitalWidget from './FutDigitalWidget'
 import './player.css'
 
 const DEFAULTS = { weather: 15, sports: 20, currency: 15, clock: 10, text: 12, webpage: 30, youtube: 60 }
@@ -96,10 +97,12 @@ function VideoItem({ item, onEnd, duration, muted, leaving, onSound }) {
 
 function WidgetItem({ item, integration, fetchData, onEnd, duration, timezone, muted }) {
   const data = useIntegrationData(integration, fetchData)
+  // FutDigital sem duração fixa: o próprio widget avisa quando mostrou todas as páginas
+  const auto = integration.type === 'futdigital' && !item.duration
   useEffect(() => {
-    const t = setTimeout(onEnd, duration * 1000)
+    const t = setTimeout(onEnd, (auto ? 900 : duration) * 1000)
     return () => clearTimeout(t)
-  }, [onEnd, duration])
+  }, [onEnd, duration, auto])
   const props = { integration, data, timezone, muted }
   switch (integration.type) {
     case 'rss': return <NewsWidget {...props} />
@@ -110,6 +113,7 @@ function WidgetItem({ item, integration, fetchData, onEnd, duration, timezone, m
     case 'text': return <TextWidget {...props} />
     case 'webpage': return <WebpageWidget {...props} />
     case 'youtube': return <YoutubeWidget {...props} />
+    case 'futdigital': return <FutDigitalWidget {...props} onDone={auto ? onEnd : undefined} />
     default: return null
   }
 }

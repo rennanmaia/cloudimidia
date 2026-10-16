@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useIntegrationData, weatherInfo } from './widgets'
+import { futdigitalTickerItems } from './FutDigitalWidget'
 
 const SIZES = { sm: '7cqh', md: '9cqh', lg: '12cqh' }
 const MIN_PX = { sm: 30, md: 36, lg: 46 }
 const SPEED = { slow: 0.24, normal: 0.16, fast: 0.1 }
-const SCROLLING = ['news', 'text', 'sports']
+const SCROLLING = ['news', 'text', 'sports', 'futdigital']
 
 function useNow(ms) {
   const [now, setNow] = useState(() => new Date())
@@ -71,6 +72,16 @@ function SportsSlot({ integration, fetchData, speed }) {
     <>
       <Label>{integration?.config?.title || data?.league || 'Placar'}</Label>
       <Marquee items={items} speed={speed} />
+    </>
+  )
+}
+
+function FutDigitalSlot({ integration, fetchData, speed }) {
+  const data = useIntegrationData(integration, fetchData)
+  return (
+    <>
+      <Label>{integration?.config?.title || data?.competition?.name || 'Placar'}</Label>
+      <Marquee items={futdigitalTickerItems(data)} speed={speed} />
     </>
   )
 }
@@ -160,6 +171,7 @@ export default function Footer({ footer, integrations, fetchData, org }) {
           case 'image': content = <img className="cm-fimg" src={s.media.url} alt="" />; break
           case 'news': content = <NewsSlot slot={s} integration={integ} fetchData={fetchData} speed={footer.speed} />; break
           case 'text': content = <TextSlot slot={s} speed={footer.speed} />; break
+          case 'futdigital': content = <FutDigitalSlot integration={integ} fetchData={fetchData} speed={footer.speed} />; break
           case 'sports': content = <SportsSlot integration={integ} fetchData={fetchData} speed={footer.speed} />; break
           case 'weather': content = <WeatherSlot integration={integ} fetchData={fetchData} />; break
           case 'currency': content = <CurrencySlot integration={integ} fetchData={fetchData} />; break

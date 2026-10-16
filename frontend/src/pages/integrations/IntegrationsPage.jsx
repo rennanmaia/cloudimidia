@@ -3,7 +3,7 @@ import { Puzzle, Plus, Pencil, Trash2, MonitorPlay, Layers } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useFetch } from '../../lib/hooks'
-import { INTEGRATION_TYPES } from '../../lib/integrationTypes'
+import { INTEGRATION_TYPES, REMOTE_TYPES } from '../../lib/integrationTypes'
 import { plural } from '../../lib/format'
 import { useConfirm, useToast } from '../../components/feedback'
 import { Button, Card, EmptyState, ErrorState, IconButton, Modal, PageHeader, PageLoader, cn } from '../../components/ui'
@@ -22,6 +22,7 @@ function describe(i, leagues) {
     case 'clock': return c.style === 'analog' ? 'Ponteiros' : 'Digital'
     case 'text': return c.title || c.message
     case 'webpage': case 'youtube': return c.url
+    case 'futdigital': return c.competition_id ? (c.competition_name || `Campeonato #${c.competition_id}`) : 'Jogos de hoje e ao vivo (todos)'
     case 'music': return c.source === 'library' ? plural((c.media_ids || []).length, 'música', 'músicas') : 'Rádio online'
     default: return ''
   }
@@ -110,7 +111,7 @@ export default function IntegrationsPage() {
             default_playlist_id: 1,
             schedules: [],
             playlists: { 1: { id: 1, transition: 'none', items: [{ id: 1, type: 'integration', kind: preview.type, integration_id: preview.id, duration: 3600, name: preview.name }] } },
-            integrations: { [preview.id]: { ...preview, has_data: ['rss', 'weather', 'sports', 'currency'].includes(preview.type) } },
+            integrations: { [preview.id]: { ...preview, has_data: REMOTE_TYPES.includes(preview.type) } },
           }} />
         )}
       </Modal>

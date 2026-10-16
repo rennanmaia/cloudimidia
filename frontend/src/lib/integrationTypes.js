@@ -1,4 +1,4 @@
-import { Newspaper, CloudSun, Trophy, TrendingUp, Clock, MessageSquareText, Globe, Youtube, Music } from 'lucide-react'
+import { Goal, Newspaper, CloudSun, Trophy, TrendingUp, Clock, MessageSquareText, Globe, Youtube, Music } from 'lucide-react'
 
 export const INTEGRATION_TYPES = {
   rss: { label: 'Notícias', description: 'Manchetes de portais via RSS (G1, Folha, UOL…)', icon: Newspaper, color: 'bg-rose-100 text-rose-600', defaultDuration: 40, ticker: true },
@@ -9,6 +9,7 @@ export const INTEGRATION_TYPES = {
   text: { label: 'Aviso / Mensagem', description: 'Comunicados internos e mensagens (TV corporativa)', icon: MessageSquareText, color: 'bg-indigo-100 text-indigo-600', defaultDuration: 12, ticker: true },
   webpage: { label: 'Página web', description: 'Exibe um site ou painel (dashboard)', icon: Globe, color: 'bg-cyan-100 text-cyan-700', defaultDuration: 30 },
   youtube: { label: 'YouTube', description: 'Vídeo, playlist ou transmissão ao vivo', icon: Youtube, color: 'bg-red-100 text-red-600', defaultDuration: 60 },
+  futdigital: { label: 'FutDigital', description: 'Jogos, resultados, classificação e artilharia do FutDigital, em páginas', icon: Goal, color: 'bg-lime-100 text-lime-700', defaultDuration: null, remote: true },
   music: { label: 'Música ambiente', description: 'Rádio online ou músicas da sua biblioteca', icon: Music, color: 'bg-fuchsia-100 text-fuchsia-600', background: true },
 }
 
@@ -45,6 +46,9 @@ export const RSS_PRESET_GROUPS = [
   },
 ]
 
+/** Tipos cujos dados vêm do servidor (prévia precisa buscar) */
+export const REMOTE_TYPES = ['rss', 'weather', 'sports', 'currency', 'futdigital']
+
 export const CURRENCY_OPTIONS = [
   ['USD-BRL', 'Dólar'], ['EUR-BRL', 'Euro'], ['GBP-BRL', 'Libra'], ['ARS-BRL', 'Peso argentino'],
   ['BTC-BRL', 'Bitcoin'], ['ETH-BRL', 'Ethereum'], ['JPY-BRL', 'Iene'], ['CNY-BRL', 'Yuan'],
@@ -55,5 +59,7 @@ export function defaultDurationFor(item) {
     if (item.kind === 'image') return 10
     return item.media?.duration ? Math.round(item.media.duration) : null
   }
+  // FutDigital: sem duração fixa, exibe todas as páginas
+  if (item.kind === 'futdigital') return null
   return INTEGRATION_TYPES[item.kind]?.defaultDuration ?? 15
 }

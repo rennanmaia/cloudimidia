@@ -8,7 +8,23 @@ declare(strict_types=1);
  */
 class Migrations
 {
-    public const VERSION = 4;
+    public const VERSION = 5;
+
+    public const ORG_CREDENTIALS_SQL = 'CREATE TABLE IF NOT EXISTS org_credentials (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id INT UNSIGNED NOT NULL,
+  provider VARCHAR(40) NOT NULL,
+  secret TEXT NOT NULL,
+  hint VARCHAR(40) NULL,
+  status VARCHAR(10) NOT NULL DEFAULT \'ok\',
+  status_message VARCHAR(500) NULL,
+  checked_at DATETIME NULL,
+  updated_by INT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_org_credentials (organization_id, provider),
+  CONSTRAINT fk_org_credentials_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const APP_RELEASES_SQL = 'CREATE TABLE IF NOT EXISTS app_releases (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -53,6 +69,9 @@ class Migrations
                 ADD COLUMN screenshot_at DATETIME NULL AFTER screenshot_path');
         }
         DB::pdo()->exec(self::APP_RELEASES_SQL);
+
+        // v5: chaves de integrações externas (ex.: FutDigital)
+        DB::pdo()->exec(self::ORG_CREDENTIALS_SQL);
 
         if (!is_dir(STORAGE_DIR)) {
             @mkdir(STORAGE_DIR, 0775, true);

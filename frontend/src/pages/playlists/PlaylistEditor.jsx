@@ -10,7 +10,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useFetch } from '../../lib/hooks'
 import { formatDuration, plural } from '../../lib/format'
-import { INTEGRATION_TYPES, defaultDurationFor } from '../../lib/integrationTypes'
+import { INTEGRATION_TYPES, REMOTE_TYPES, defaultDurationFor } from '../../lib/integrationTypes'
 import { useConfirm, useToast } from '../../components/feedback'
 import { Badge, Button, Card, CardTitle, EmptyState, ErrorState, Field, IconButton, Input, Modal, PageHeader, PageLoader, Select, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
@@ -19,7 +19,7 @@ import { PlaylistPreviewModal } from '../../components/Preview'
 import FooterEditor, { DEFAULT_FOOTER, SLOT_TYPES } from './FooterEditor'
 
 const uid = () => Math.random().toString(36).slice(2)
-const REMOTE = ['rss', 'weather', 'sports', 'currency']
+const REMOTE = REMOTE_TYPES
 
 function SortableItem({ item, index, integration, onChange, onRemove, readOnly }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.uid, disabled: readOnly })
@@ -162,7 +162,7 @@ export default function PlaylistEditor() {
   const setItems = (fn) => { setState((s) => ({ ...s, items: fn(s.items) })); setDirty(true) }
 
   const addMedia = (list) => setItems((items) => [...items, ...list.map((m) => ({ uid: uid(), type: 'media', kind: m.type, name: m.name, media: m, duration: m.type === 'image' ? 10 : null, settings: {} }))])
-  const addIntegration = (i) => setItems((items) => [...items, { uid: uid(), type: 'integration', kind: i.type, name: i.name, integration_id: i.id, duration: INTEGRATION_TYPES[i.type]?.defaultDuration ?? 15, settings: {} }])
+  const addIntegration = (i) => setItems((items) => [...items, { uid: uid(), type: 'integration', kind: i.type, name: i.name, integration_id: i.id, duration: i.type === 'futdigital' ? null : (INTEGRATION_TYPES[i.type]?.defaultDuration ?? 15), settings: {} }])
 
   const onDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return

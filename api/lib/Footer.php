@@ -14,8 +14,8 @@ declare(strict_types=1);
 class Footer
 {
     /** Tipo de slot => tipo de integração exigido */
-    private const INTEGRATION_SLOTS = ['news' => 'rss', 'weather' => 'weather', 'currency' => 'currency', 'sports' => 'sports'];
-    private const TYPES = ['logo', 'image', 'news', 'text', 'weather', 'clock', 'currency', 'sports'];
+    private const INTEGRATION_SLOTS = ['news' => 'rss', 'weather' => 'weather', 'currency' => 'currency', 'sports' => 'sports', 'futdigital' => 'futdigital'];
+    private const TYPES = ['logo', 'image', 'news', 'text', 'weather', 'clock', 'currency', 'sports', 'futdigital'];
     private const MAX_SLOTS = 8;
 
     public static function sanitize(int $orgId, $input): ?array
@@ -82,6 +82,7 @@ class Footer
             'weather' => 'Escolha a previsão do tempo da barra inferior.',
             'currency' => 'Escolha as cotações da barra inferior.',
             'sports' => 'Escolha o campeonato da barra inferior.',
+            'futdigital' => 'Escolha a integração do FutDigital da barra inferior.',
         ][$type];
     }
 

@@ -6,10 +6,13 @@ declare(strict_types=1);
  */
 class Integrations
 {
-    public const TYPES = ['rss', 'weather', 'sports', 'currency', 'clock', 'text', 'webpage', 'youtube', 'music'];
+    public const TYPES = ['rss', 'weather', 'sports', 'currency', 'clock', 'text', 'webpage', 'youtube', 'music', 'futdigital'];
+
+    /** Páginas que a integração FutDigital pode exibir */
+    public const FUTDIGITAL_VIEWS = ['live', 'today', 'results', 'upcoming', 'standings', 'scorers'];
 
     /** Tipos cujos dados são buscados no servidor (com cache), em segundos */
-    private const TTL = ['rss' => 600, 'weather' => 1200, 'sports' => 120, 'currency' => 300];
+    private const TTL = ['rss' => 600, 'weather' => 1200, 'sports' => 120, 'currency' => 300, 'futdigital' => 60];
 
     public const SPORTS_LEAGUES = [
         'soccer/bra.1' => 'Brasileirão Série A',
@@ -94,6 +97,21 @@ class Integrations
                     if (!$cfg['media_ids']) abort('Selecione ao menos uma música da biblioteca.', 422);
                 }
                 return $cfg;
+            case 'futdigital':
+                $views = array_values(array_intersect(self::FUTDIGITAL_VIEWS, array_map('strval', (array)($c['views'] ?? []))));
+                $competition = $int('competition_id', 0, PHP_INT_MAX, 0);
+                // Sem campeonato definido só dá para mostrar jogos de hoje/ao vivo de todos
+                if (!$competition) $views = array_values(array_intersect($views, ['live', 'today']));
+                if (!$views) $views = $competition ? ['today', 'results', 'upcoming', 'standings'] : ['live', 'today'];
+                return [
+                    'competition_id' => $competition,
+                    'competition_name' => $str('competition_name', 160),
+                    'views' => $views,
+                    'max_matches' => $int('max_matches', 2, 40, 12),
+                    'per_page' => in_array((int)($c['per_page'] ?? 6), [4, 6, 8], true) ? (int)($c['per_page'] ?? 6) : 6,
+                    'page_duration' => $int('page_duration', 5, 60, 10),
+                    'title' => $str('title', 80),
+                ];
         }
         abort('Tipo de integração inválido.', 422);
     }
@@ -139,7 +157,7 @@ class Integrations
         }
 
         try {
-            $data = self::fetch($type, $config);
+            $data = self::fetch($type, $config, (int)($integration['organization_id'] ?? 0));
             DB::exec(
                 'REPLACE INTO integration_cache (integration_id, config_hash, data, error, fetched_at) VALUES (?,?,?,NULL,?)',
                 [$id, $hash, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), now()]
@@ -155,9 +173,10 @@ class Integrations
         }
     }
 
-    public static function fetch(string $type, array $c): array
+    public static function fetch(string $type, array $c, int $orgId = 0): array
     {
         switch ($type) {
+            case 'futdigital': return self::futdigital($c, $orgId);
             case 'rss': return self::rss($c);
             case 'weather': return self::weather($c);
             case 'sports': return self::sports($c);
@@ -166,7 +185,7 @@ class Integrations
         return [];
     }
 
-    public static function httpGet(string $url, int $timeout = 12): string
+    public static function httpGet(string $url, int $timeout = 12, array $headers = [], bool $throwOnHttpError = true, ?int &$httpStatus = null): string
     {
         if (!function_exists('curl_init')) {
             $ctx = stream_context_create(['http' => ['timeout' => $timeout, 'header' => "User-Agent: CloudMidia/1.0\r\n"]]);
@@ -174,7 +193,7 @@ class Integrations
             if ($res === false) throw new RuntimeException('Falha ao acessar a fonte de dados.');
             return $res;
         }
-        $attempt = function (?string $caFile) use ($url, $timeout) {
+        $attempt = function (?string $caFile) use ($url, $timeout, $headers) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
@@ -186,6 +205,7 @@ class Integrations
                 CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; CloudMidia/1.0)',
                 CURLOPT_SSL_VERIFYPEER => (bool)config('http_verify_ssl', true),
                 CURLOPT_SSL_VERIFYHOST => config('http_verify_ssl', true) ? 2 : 0,
+                CURLOPT_HTTPHEADER => $headers,
             ]);
             if ($caFile) {
                 curl_setopt($ch, CURLOPT_CAINFO, $caFile);
@@ -209,7 +229,8 @@ class Integrations
             }
         }
         if ($errno !== 0) throw new RuntimeException('Falha de conexão: ' . $error);
-        if ($status >= 400) throw new RuntimeException('A fonte respondeu com erro HTTP ' . $status);
+        $httpStatus = $status;
+        if ($status >= 400 && $throwOnHttpError) throw new RuntimeException('A fonte respondeu com erro HTTP ' . $status);
         return (string)$body;
     }
 
@@ -405,6 +426,149 @@ class Integrations
             ];
         }
         return ['quotes' => $quotes];
+    }
+
+    /* ---------------- FutDigital (API de parceiros) ---------------- */
+
+    /** Chamada à API de parceiros do FutDigital. Retorna o conteúdo de "data" ou lança a mensagem de erro da API. */
+    public static function futdigitalApi(string $key, string $path, array $query = [])
+    {
+        $url = 'https://fut.digital/api/v1/partner/' . ltrim($path, '/') . ($query ? '?' . http_build_query($query) : '');
+        $status = 0;
+        $body = self::httpGet($url, 15, ['Authorization: Bearer ' . $key, 'Accept: application/json'], false, $status);
+        $j = json_decode($body, true);
+        if ($status >= 400 || !is_array($j) || !array_key_exists('data', $j)) {
+            $msg = is_array($j) ? ($j['error']['message'] ?? $j['error'] ?? null) : null;
+            throw new RuntimeException(is_string($msg) && $msg !== '' ? $msg : "resposta inesperada (HTTP $status)");
+        }
+        return $j['data'];
+    }
+
+    private static function fdTeam(array $t, $score, $pens): array
+    {
+        return [
+            'name' => $t['name'] ?? '',
+            'short' => $t['short_name'] ?? '',
+            'crest' => $t['crest_url'] ?? null,
+            'score' => $score,
+            'pens' => $pens,
+        ];
+    }
+
+    private static function fdMatch(array $m): array
+    {
+        return [
+            'id' => (int)($m['id'] ?? 0),
+            'status' => $m['status'] ?? 'scheduled',
+            'status_label' => $m['status_label'] ?? '',
+            'period' => $m['period'] ?? null,
+            'scheduled_at' => $m['scheduled_at'] ?? null,
+            'timezone' => $m['timezone'] ?? 'America/Sao_Paulo',
+            'home' => self::fdTeam($m['home'] ?? [], $m['home_score'] ?? null, $m['home_penalties'] ?? null),
+            'away' => self::fdTeam($m['away'] ?? [], $m['away_score'] ?? null, $m['away_penalties'] ?? null),
+            'competition' => $m['competition']['name'] ?? null,
+            'competition_logo' => $m['competition']['logo_url'] ?? null,
+            'stage' => $m['stage'] ?? null,
+            'group' => $m['group'] ?? null,
+            'round' => $m['round'] ?? null,
+            'venue' => $m['venue'] ?? null,
+            // Cronômetro: segundos no momento da consulta; a TV continua contando a partir daqui
+            'clock' => isset($m['clock']['seconds']) ? [
+                'seconds' => (int)$m['clock']['seconds'],
+                'running' => (bool)($m['clock']['running'] ?? false),
+                'label' => $m['clock']['label'] ?? null,
+            ] : null,
+        ];
+    }
+
+    /** Monta as páginas da integração FutDigital (ao vivo, hoje, resultados, próximos, classificação, artilharia). */
+    public static function futdigital(array $c, int $orgId): array
+    {
+        $key = Credentials::get($orgId, 'futdigital');
+        if ($key === null) throw new RuntimeException('Cadastre a chave do FutDigital em Configurações → Chaves de integrações.');
+        $cid = (int)$c['competition_id'];
+        $max = (int)$c['max_matches'];
+        $filter = fn(array $list) => array_values(array_filter($list, fn($m) => !$cid || (int)($m['competition']['id'] ?? 0) === $cid));
+
+        $competition = null;
+        if ($cid) {
+            $comp = self::futdigitalApi($key, "competitions/$cid");
+            $competition = [
+                'id' => $cid,
+                'name' => $comp['name'] ?? $c['competition_name'],
+                'logo' => $comp['logo_url'] ?? null,
+                'cover' => $comp['cover_url'] ?? null,
+                'city' => $comp['city'] ?? null,
+                'league' => $comp['league']['name'] ?? null,
+            ];
+        }
+
+        $sections = [];
+        $errors = [];
+        foreach ($c['views'] as $view) {
+            try {
+                switch ($view) {
+                    case 'live':
+                        $list = $filter(self::futdigitalApi($key, 'live'));
+                        if ($list) $sections[] = ['type' => 'matches', 'view' => 'live', 'title' => 'Ao vivo', 'matches' => array_map([self::class, 'fdMatch'], array_slice($list, 0, $max))];
+                        break;
+                    case 'today':
+                        $today = self::futdigitalApi($key, 'today');
+                        $list = $filter($today['matches'] ?? []);
+                        if ($list) $sections[] = ['type' => 'matches', 'view' => 'today', 'title' => 'Jogos de hoje', 'matches' => array_map([self::class, 'fdMatch'], array_slice($list, 0, $max))];
+                        break;
+                    case 'results':
+                        $list = self::futdigitalApi($key, "competitions/$cid/matches", ['status' => 'finished', 'order' => 'desc', 'limit' => $max]);
+                        if ($list) $sections[] = ['type' => 'matches', 'view' => 'results', 'title' => 'Últimos resultados', 'matches' => array_map([self::class, 'fdMatch'], $list)];
+                        break;
+                    case 'upcoming':
+                        $list = self::futdigitalApi($key, "competitions/$cid/matches", ['status' => 'scheduled', 'order' => 'asc', 'limit' => $max]);
+                        if ($list) $sections[] = ['type' => 'matches', 'view' => 'upcoming', 'title' => 'Próximos jogos', 'matches' => array_map([self::class, 'fdMatch'], $list)];
+                        break;
+                    case 'standings':
+                        $groups = [];
+                        foreach (self::futdigitalApi($key, "competitions/$cid/standings") as $g) {
+                            $rows = array_map(fn($r) => [
+                                'pos' => (int)($r['position'] ?? 0),
+                                'team' => $r['club']['name'] ?? '',
+                                'short' => $r['club']['short_name'] ?? '',
+                                'crest' => $r['club']['crest_url'] ?? null,
+                                'pts' => (int)($r['points'] ?? 0),
+                                'j' => (int)($r['played'] ?? 0),
+                                'v' => (int)($r['wins'] ?? 0),
+                                'e' => (int)($r['draws'] ?? 0),
+                                'd' => (int)($r['losses'] ?? 0),
+                                'sg' => (int)($r['goal_diff'] ?? 0),
+                                'form' => array_slice((array)($r['form'] ?? []), -5),
+                                'zone' => $r['zone']['color'] ?? null,
+                                'zone_label' => $r['zone']['label'] ?? null,
+                            ], $g['rows'] ?? []);
+                            if ($rows) $groups[] = ['name' => $g['group_name'] ?? 'Classificação', 'rows' => $rows];
+                        }
+                        if ($groups) $sections[] = ['type' => 'standings', 'view' => 'standings', 'title' => 'Classificação', 'groups' => $groups];
+                        break;
+                    case 'scorers':
+                        $rows = array_map(fn($s) => [
+                            'name' => $s['athlete']['nickname'] ?? null ?: ($s['athlete']['name'] ?? ''),
+                            'photo' => $s['athlete']['photo_url'] ?? null,
+                            'team' => $s['club']['short_name'] ?? ($s['club']['name'] ?? ''),
+                            'crest' => $s['club']['crest_url'] ?? null,
+                            'goals' => (int)($s['goals'] ?? 0),
+                        ], array_slice(self::futdigitalApi($key, "competitions/$cid/scorers"), 0, 20));
+                        if ($rows) $sections[] = ['type' => 'scorers', 'view' => 'scorers', 'title' => 'Artilharia', 'rows' => $rows];
+                        break;
+                }
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+        if (!$sections && $errors) throw new RuntimeException($errors[0]);
+        return [
+            'title' => $c['title'] ?: ($competition['name'] ?? 'FutDigital'),
+            'competition' => $competition,
+            'sections' => $sections,
+            'fetched_at' => gmdate('c'),
+        ];
     }
 
     public static function geocode(string $q): array

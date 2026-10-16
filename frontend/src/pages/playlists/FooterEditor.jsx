@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Building2, Image as ImageIcon, Newspaper, MessageSquareText, CloudSun, Clock, TrendingUp, Trophy,
-  ArrowUp, ArrowDown, Trash2, Plus, AlertTriangle, LayoutTemplate,
+  Goal, ArrowUp, ArrowDown, Trash2, Plus, AlertTriangle, LayoutTemplate,
 } from 'lucide-react'
 import { Button, ColorPicker, Field, IconButton, Input, Modal, Segmented, Select, Textarea, Toggle, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
@@ -17,9 +17,10 @@ export const SLOT_TYPES = {
   clock: { label: 'Relógio', icon: Clock, color: 'bg-slate-100 text-slate-700' },
   currency: { label: 'Cotações', icon: TrendingUp, color: 'bg-amber-100 text-amber-700', integration: 'currency' },
   sports: { label: 'Placar dos jogos', icon: Trophy, color: 'bg-emerald-100 text-emerald-700', integration: 'sports' },
+  futdigital: { label: 'Placar FutDigital', hint: 'Jogos do FutDigital rolando', icon: Goal, color: 'bg-lime-100 text-lime-700', integration: 'futdigital' },
 }
 
-const INTEGRATION_LABEL = { rss: 'notícias', weather: 'previsão do tempo', currency: 'cotações', sports: 'resultados de jogos' }
+const INTEGRATION_LABEL = { futdigital: 'FutDigital', rss: 'notícias', weather: 'previsão do tempo', currency: 'cotações', sports: 'resultados de jogos' }
 
 export const DEFAULT_FOOTER = { enabled: true, size: 'md', speed: 'normal', background: '#111827', color: '#ffffff', accent: '#6366f1', slots: [] }
 

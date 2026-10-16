@@ -104,6 +104,13 @@ try {
     $r->delete('orgs/{org}/integrations/{id}', [IntegrationController::class, 'destroy']);
     $r->get('orgs/{org}/integrations/{id}/data', [IntegrationController::class, 'data']);
 
+    // Chaves de integrações externas
+    $r->get('orgs/{org}/credentials', [CredentialController::class, 'index']);
+    $r->put('orgs/{org}/credentials/{provider}', [CredentialController::class, 'update']);
+    $r->delete('orgs/{org}/credentials/{provider}', [CredentialController::class, 'destroy']);
+    $r->post('orgs/{org}/credentials/{provider}/test', [CredentialController::class, 'test']);
+    $r->get('orgs/{org}/futdigital/competitions', [CredentialController::class, 'futdigitalCompetitions']);
+
     // Relatórios
     $r->get('orgs/{org}/reports/plays', [ReportController::class, 'plays']);
 

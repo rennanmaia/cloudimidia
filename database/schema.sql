@@ -317,4 +317,20 @@ CREATE TABLE IF NOT EXISTS app_releases (
   UNIQUE KEY uq_app_releases_code (version_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS org_credentials (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id INT UNSIGNED NOT NULL,
+  provider VARCHAR(40) NOT NULL,
+  secret TEXT NOT NULL,
+  hint VARCHAR(40) NULL,
+  status VARCHAR(10) NOT NULL DEFAULT 'ok',
+  status_message VARCHAR(500) NULL,
+  checked_at DATETIME NULL,
+  updated_by INT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_org_credentials (organization_id, provider),
+  CONSTRAINT fk_org_credentials_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

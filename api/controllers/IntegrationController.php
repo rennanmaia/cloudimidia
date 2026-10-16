@@ -101,7 +101,7 @@ class IntegrationController
         $config = self::validConfig($ctx, $type);
         if (!Integrations::hasRemoteData($type)) respond(['data' => null]);
         try {
-            respond(['data' => Integrations::fetch($type, $config)]);
+            respond(['data' => Integrations::fetch($type, $config, $ctx->id())]);
         } catch (Throwable $e) {
             abort('Não foi possível obter os dados: ' . $e->getMessage(), 422);
         }

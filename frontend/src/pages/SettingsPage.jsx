@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useFetch } from '../lib/hooks'
 import { formatBytes, timeAgo } from '../lib/format'
 import { useToast } from '../components/feedback'
+import CredentialsCard from '../components/CredentialsCard'
 import { Button, Card, CardTitle, Field, Input, Modal, PageHeader, ProgressBar, Select } from '../components/ui'
 
 const TIMEZONES = [
@@ -108,6 +109,8 @@ export default function SettingsPage() {
             <div className="flex justify-end"><Button type="submit" icon={Save} loading={saving}>Salvar</Button></div>
           </form>
         </Card>
+
+        <CredentialsCard />
 
         <Card>
           <CardTitle>Plano e uso</CardTitle>

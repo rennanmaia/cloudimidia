@@ -174,6 +174,8 @@ export default function App() {
         onMessage={onMessage}
         javaScriptEnabled
         domStorageEnabled
+        // Slot FutDigital (iframe): a página guarda a sequência e os últimos dados no localStorage
+        thirdPartyCookiesEnabled
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
         mixedContentMode="always"

@@ -22,6 +22,7 @@ function describe(i, leagues) {
     case 'clock': return c.style === 'analog' ? 'Ponteiros' : 'Digital'
     case 'text': return c.title || c.message
     case 'webpage': case 'youtube': return c.url
+    case 'futdigital_slot': return [c.source_name, `${c.duration_seconds || 15} s`, { landscape: 'deitada', portrait: 'em pé', auto: 'formato automático' }[c.orientation]].filter(Boolean).join(' · ')
     case 'futdigital': return c.competition_id ? (c.competition_name || `Campeonato #${c.competition_id}`) : 'Jogos de hoje e ao vivo (todos)'
     case 'music': return c.source === 'library' ? plural((c.media_ids || []).length, 'música', 'músicas') : 'Rádio online'
     default: return ''

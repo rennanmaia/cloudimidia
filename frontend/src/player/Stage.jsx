@@ -6,6 +6,7 @@ import {
 } from './widgets'
 import Footer from './Footer'
 import FutDigitalWidget from './FutDigitalWidget'
+import FutDigitalSlotItem, { SlotPrewarm, slotBlocked } from './FutDigitalSlotItem'
 import './player.css'
 
 const DEFAULTS = { weather: 15, sports: 20, currency: 15, clock: 10, text: 12, webpage: 30, youtube: 60 }
@@ -17,6 +18,7 @@ function isPlayable(item, integrations, cached) {
     return !cached || !item.media?.src_url || cached.has(item.media.src_url)
   }
   const integ = integrations?.[item.integration_id]
+  if (integ?.type === 'futdigital_slot') return !!integ.config?.slot_url && !slotBlocked(integ.id)
   return !!integ && integ.type !== 'music'
 }
 
@@ -31,6 +33,7 @@ function itemDuration(item, integrations) {
   if (item.duration) return item.duration
   if (item.type === 'media') return item.kind === 'image' ? 10 : null
   const integ = integrations?.[item.integration_id]
+  if (integ?.type === 'futdigital_slot') return integ.config?.duration_seconds || 15
   if (integ?.type === 'rss') return Math.min(integ.config?.max_items || 10, 6) * (integ.config?.item_duration || 10)
   return DEFAULTS[integ?.type] ?? 15
 }
@@ -220,7 +223,7 @@ export function IdleScreen({ org, message = 'Aguardando programação' }) {
  * - onPlayed(log): chamado ao fim de cada item (comprovação de exibição)
  * - onNowPlaying(texto)
  */
-export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMedia, onNowPlaying, identify }) {
+export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMedia, onNowPlaying, identify, preview }) {
   const integrations = manifest?.integrations || {}
   const muted = !!manifest?.screen?.muted
   const [program, setProgram] = useState(() => resolveProgram(manifest))
@@ -391,7 +394,9 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMe
           let content = null
           if (item.type === 'media' && item.kind === 'image') content = <ImageItem {...common} duration={duration} />
           else if (item.type === 'media' && item.kind === 'video') content = <VideoItem {...common} duration={item.duration} muted={muted} leaving={leaving} onSound={setVideoSound} />
-          else if (item.type === 'integration' && integrations[item.integration_id]) {
+          else if (item.type === 'integration' && integrations[item.integration_id]?.type === 'futdigital_slot') {
+            content = <FutDigitalSlotItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} preview={preview} />
+          } else if (item.type === 'integration' && integrations[item.integration_id]) {
             content = <WidgetItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} duration={duration} timezone={manifest?.organization?.timezone} muted={muted} />
           }
           return (
@@ -413,6 +418,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMe
       </div>
       {tickerPlaylist?.footer && <Footer footer={tickerPlaylist.footer} integrations={integrations} fetchData={fetchData} org={manifest?.organization} />}
       {musicInteg && <Music integration={musicInteg} paused={muted || videoSound} />}
+      {!preview && <SlotPrewarm integrations={integrations} />}
     </div>
   )
 }

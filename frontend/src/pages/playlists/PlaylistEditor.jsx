@@ -25,8 +25,9 @@ function SortableItem({ item, index, integration, onChange, onRemove, readOnly }
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.uid, disabled: readOnly })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const T = item.type === 'integration' ? INTEGRATION_TYPES[item.kind] : null
-  const def = defaultDurationFor(item)
+  const def = defaultDurationFor(item, integration)
   const isVideo = item.kind === 'video'
+  const fixedDuration = item.kind === 'futdigital_slot'
   const fit = item.settings?.fit || (isVideo ? 'contain' : 'cover')
   return (
     <li ref={setNodeRef} style={style} className={cn('flex items-center gap-2 rounded-2xl bg-white p-2 ring-1 ring-slate-200 sm:gap-3', isDragging && 'z-10 shadow-xl ring-brand-300')}>
@@ -64,12 +65,12 @@ function SortableItem({ item, index, integration, onChange, onRemove, readOnly }
             type="number"
             min={1}
             inputMode="numeric"
-            disabled={readOnly}
-            value={item.duration ?? ''}
+            disabled={readOnly || fixedDuration}
+            value={fixedDuration ? '' : item.duration ?? ''}
             placeholder={def ? String(def) : 'fim'}
             onChange={(e) => onChange({ duration: e.target.value ? Number(e.target.value) : null })}
             className="h-9 pr-6 text-right text-sm"
-            title={isVideo ? 'Duração em segundos (vazio = até o fim do vídeo)' : 'Duração em segundos'}
+            title={fixedDuration ? 'Duração definida na integração (tempo da inserção)' : isVideo ? 'Duração em segundos (vazio = até o fim do vídeo)' : 'Duração em segundos'}
           />
           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">s</span>
         </div>
@@ -162,14 +163,14 @@ export default function PlaylistEditor() {
   const setItems = (fn) => { setState((s) => ({ ...s, items: fn(s.items) })); setDirty(true) }
 
   const addMedia = (list) => setItems((items) => [...items, ...list.map((m) => ({ uid: uid(), type: 'media', kind: m.type, name: m.name, media: m, duration: m.type === 'image' ? 10 : null, settings: {} }))])
-  const addIntegration = (i) => setItems((items) => [...items, { uid: uid(), type: 'integration', kind: i.type, name: i.name, integration_id: i.id, duration: i.type === 'futdigital' ? null : (INTEGRATION_TYPES[i.type]?.defaultDuration ?? 15), settings: {} }])
+  const addIntegration = (i) => setItems((items) => [...items, { uid: uid(), type: 'integration', kind: i.type, name: i.name, integration_id: i.id, duration: i.type === 'futdigital' || i.type === 'futdigital_slot' ? null : (INTEGRATION_TYPES[i.type]?.defaultDuration ?? 15), settings: {} }])
 
   const onDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return
     setItems((items) => arrayMove(items, items.findIndex((i) => i.uid === active.id), items.findIndex((i) => i.uid === over.id)))
   }
 
-  const total = state.items.reduce((acc, it) => acc + (it.duration || defaultDurationFor(it) || 0), 0)
+  const total = state.items.reduce((acc, it) => acc + (it.duration || defaultDurationFor(it, intById[it.integration_id]) || 0), 0)
 
   const save = async () => {
     setSaving(true)

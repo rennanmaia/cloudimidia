@@ -13,7 +13,7 @@ ErrorDocument 500 default
     RewriteRule ^app/?$ api/index.php?_route=player/app/download [END]
 
     # Pastas internas nunca são servidas
-    RewriteRule ^(frontend|app|database|storage|node_modules|\.git)(/|$) - [F,L]
+    RewriteRule ^(frontend|app|database|storage|tests|node_modules|\.git)(/|$) - [F,L]
     RewriteRule (^|/)\.(?!well-known) - [F,L]
 
     # Painel (SPA)

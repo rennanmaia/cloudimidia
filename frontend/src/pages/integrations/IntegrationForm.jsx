@@ -9,6 +9,7 @@ import { useToast } from '../../components/feedback'
 import { Button, ColorPicker, Field, Input, Modal, Segmented, Select, Textarea, Toggle, cn } from '../../components/ui'
 import MediaPicker from '../../components/MediaPicker'
 import { PreviewFrame } from '../../components/Preview'
+import FutDigitalSlotFields, { SlotPreview } from './FutDigitalSlotFields'
 
 const DEFAULT_CONFIG = {
   rss: { url: '', urls: [''], max_items: 10, item_duration: 10, show_images: true, source_name: '' },
@@ -20,6 +21,7 @@ const DEFAULT_CONFIG = {
   webpage: { url: '', reload_minutes: 0 },
   youtube: { url: '', muted: true },
   futdigital: { competition_id: 0, competition_name: '', views: ['live', 'today'], max_matches: 12, per_page: 6, page_duration: 10, title: '' },
+  futdigital_slot: { source_type: 'competition', source_id: 0, source_name: '', source_image: '', orientation: 'auto', duration_seconds: 15, views: ['live', 'results', 'upcoming'], per_screen: 0, upcoming_days: 7, show_qr: true, skip_when_empty: true },
   music: { source: 'stream', stream_url: '', media_ids: [], volume: 60, shuffle: true },
 }
 
@@ -161,6 +163,8 @@ function ConfigFields({ type, config, set, leagues }) {
   switch (type) {
     case 'futdigital':
       return <FutDigitalFields config={config} set={set} />
+    case 'futdigital_slot':
+      return <FutDigitalSlotFields config={config} set={set} />
     case 'rss':
       return (
         <div className="space-y-4">
@@ -319,10 +323,14 @@ export default function IntegrationForm({ open, onClose, integration, presetType
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [test, setTest] = useState(null)
+  // Slot FutDigital recém-criado: o formulário continua aberto para mostrar a prévia
+  const [created, setCreated] = useState(null)
+  const editing = integration || created
 
   useEffect(() => {
     if (!open) return
     setTest(null)
+    setCreated(null)
     if (integration) {
       setType(integration.type)
       setName(integration.name)
@@ -367,10 +375,16 @@ export default function IntegrationForm({ open, onClose, integration, presetType
     e.preventDefault()
     setSaving(true)
     try {
-      if (integration) await api.put(`orgs/${orgId}/integrations/${integration.id}`, { name, config })
-      else await api.post(`orgs/${orgId}/integrations`, { type, name, config })
+      const r = editing
+        ? await api.put(`orgs/${orgId}/integrations/${editing.id}`, { name, config })
+        : await api.post(`orgs/${orgId}/integrations`, { type, name, config })
       toast.success('Integração salva')
       onSaved()
+      if (type === 'futdigital_slot') {
+        // Mostra a prévia com o endereço criado no FutDigital
+        setConfig({ ...DEFAULT_CONFIG[type], ...r.integration.config })
+        if (!editing) { setCreated(r.integration); return }
+      }
       onClose()
     } catch (err) {
       toast.error(err)
@@ -380,7 +394,7 @@ export default function IntegrationForm({ open, onClose, integration, presetType
   }
 
   const T = type ? INTEGRATION_TYPES[type] : null
-  const remote = REMOTE_TYPES.includes(type)
+  const remote = REMOTE_TYPES.includes(type) && type !== 'futdigital_slot'
   const localPreview = ['clock', 'text'].includes(type)
 
   return (
@@ -388,13 +402,14 @@ export default function IntegrationForm({ open, onClose, integration, presetType
       open={open}
       onClose={onClose}
       size="lg"
-      title={T ? <span className="flex items-center gap-2"><span className={cn('flex size-8 items-center justify-center rounded-lg', T.color)}><T.icon className="size-4" /></span>{integration ? 'Editar' : 'Nova'}: {T.label}</span> : 'Nova integração'}
+      title={T ? <span className="flex items-center gap-2"><span className={cn('flex size-8 items-center justify-center rounded-lg', T.color)}><T.icon className="size-4" /></span>{editing ? 'Editar' : 'Nova'}: {T.label}</span> : 'Nova integração'}
       description={!T ? 'Escolha o tipo de conteúdo automático.' : null}
       footer={T && (
         <>
-          {!integration && <Button variant="ghost" onClick={() => setType(null)} className="sm:mr-auto">Trocar tipo</Button>}
+          {!editing && <Button variant="ghost" onClick={() => setType(null)} className="sm:mr-auto">Trocar tipo</Button>}
           {remote && <Button variant="secondary" icon={FlaskConical} loading={testing} onClick={runTest}>Testar</Button>}
-          <Button type="submit" form="integration-form" loading={saving}>Salvar</Button>
+          {created && <Button variant="secondary" onClick={onClose}>Concluir</Button>}
+          <Button type="submit" form="integration-form" loading={saving}>{type === 'futdigital_slot' && !editing ? 'Criar slot' : 'Salvar'}</Button>
         </>
       )}
     >
@@ -403,6 +418,13 @@ export default function IntegrationForm({ open, onClose, integration, presetType
           <Field label="Nome (para você identificar)">
             <Input required value={name} onChange={(e) => { setName(e.target.value); setNameTouched(true) }} />
           </Field>
+          {type === 'futdigital_slot' && (
+            <Field label="Prévia" hint={config.slot_url ? 'Como aparece na TV (a prévia não avança a sequência nem conta exibição). Mudanças aparecem depois de salvar.' : undefined}>
+              {config.slot_url
+                ? <SlotPreview config={config} />
+                : <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500 ring-1 ring-slate-200">Escolha a fonte e clique em <b>Criar slot</b>: o slot é criado no FutDigital e a prévia aparece aqui.</p>}
+            </Field>
+          )}
           <ConfigFields type={type} config={config} set={set} leagues={leagues || {}} />
           {localPreview && (
             <Field label="Prévia">

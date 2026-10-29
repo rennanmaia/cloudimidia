@@ -11,7 +11,7 @@ export function PreviewFrame({ manifest, portrait, className }) {
   const fetchData = useCallback((id) => api.get(`orgs/${orgId}/integrations/${id}/data`), [orgId])
   return (
     <div className={cn('mx-auto overflow-hidden rounded-xl bg-black shadow-xl ring-1 ring-slate-900/10', portrait ? 'aspect-[9/16] max-h-[70dvh]' : 'aspect-video w-full', className)}>
-      {manifest && <Stage manifest={manifest} fetchData={fetchData} />}
+      {manifest && <Stage preview manifest={manifest} fetchData={fetchData} />}
     </div>
   )
 }

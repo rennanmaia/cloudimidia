@@ -217,3 +217,7 @@
 .cm-fd-scorers .lbl { font-size: .65em; opacity: .7; }
 .cm-fd-empty { height: 100%; display: flex; align-items: center; justify-content: center; font-size: min(4cqh, 2.4cqw); opacity: .8; }
 .cm-fd-brand { position: absolute; right: 3.4cqw; bottom: 1cqh; font-size: min(1.8cqh, 1.1cqw); opacity: .45; font-weight: 700; letter-spacing: .05em; }
+
+/* Slot FutDigital: página pronta do FutDigital (fundo da própria página, sem clarão branco) */
+.cm-fd-slot { position: absolute; inset: 0; background: #04140c; }
+.cm-fd-slot iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; background: #04140c; }

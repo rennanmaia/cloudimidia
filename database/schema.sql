@@ -333,4 +333,18 @@ CREATE TABLE IF NOT EXISTS org_credentials (
   CONSTRAINT fk_org_credentials_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS play_issues (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id INT UNSIGNED NOT NULL,
+  screen_id INT UNSIGNED NOT NULL,
+  media_id INT UNSIGNED NULL,
+  integration_id INT UNSIGNED NULL,
+  reason VARCHAR(20) NOT NULL,
+  detail VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  KEY ix_play_issues_screen (screen_id, created_at),
+  CONSTRAINT fk_play_issues_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  CONSTRAINT fk_play_issues_screen FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

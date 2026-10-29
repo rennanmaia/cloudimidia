@@ -106,6 +106,11 @@ class LocalServer private constructor(private val ctx: Context) {
                 when {
                     method != "GET" && !head -> status(out, 405, "Method Not Allowed")
                     path == "/health" -> text(out, 200, "ok")
+                    path == "/cache/state" -> {
+                        val bytes = MediaCache.state(ctx).toString().toByteArray()
+                        writeHead(out, 200, "OK", mapOf("Content-Type" to "application/json", "Content-Length" to bytes.size.toString(), "Cache-Control" to "no-store"))
+                        if (!head) out.write(bytes)
+                    }
                     path == "/cache" -> {
                         val url = query.split('&').firstOrNull { it.startsWith("u=") }?.let { URLDecoder.decode(it.substring(2), "UTF-8") }
                         if (url == null) return status(out, 400, "Bad Request")

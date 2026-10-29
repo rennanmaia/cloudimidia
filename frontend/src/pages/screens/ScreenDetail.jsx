@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   RotateCw, ScanEye, RefreshCw, Pencil, Trash2, MonitorPlay, Volume2, VolumeX, Power, CalendarClock, Plus, UserPlus,
-  Cpu, Clock, MapPin, ListVideo, Replace, Users, PlayCircle, Radio, PlugZap, Link2, KeyRound,
+  Cpu, Clock, MapPin, ListVideo, Replace, Users, PlayCircle, Radio, PlugZap, Link2, KeyRound, AlertTriangle,
 } from 'lucide-react'
 import InstallLinkModal from '../../components/InstallLink'
 import AppDevicePanel from '../../components/AppDevicePanel'
@@ -240,6 +240,7 @@ export default function ScreenDetail() {
 
         <div className="min-w-0 space-y-5 lg:col-span-2">
           {screen.is_app && <AppDevicePanel screen={screen} onReload={reload} />}
+          {data.issues?.length > 0 && <IssuesCard issues={data.issues} />}
           <Card>
             <CardTitle icon={Cpu}>Informações</CardTitle>
             <dl className="space-y-3 text-sm">
@@ -302,6 +303,44 @@ export default function ScreenDetail() {
       <InviteModal open={invite} onClose={() => { setInvite(false); reload() }} presetScreenIds={[screen.id]} />
       <InstallLinkModal open={installOpen} onClose={() => setInstallOpen(false)} screen={screen} onChanged={() => reload(true)} />
     </div>
+  )
+}
+
+const ISSUE_LABELS = {
+  error: { label: 'Não abriu', color: 'red' },
+  stalled: { label: 'Travou', color: 'amber' },
+  timeout: { label: 'Não começou', color: 'amber' },
+  empty: { label: 'Sem conteúdo', color: 'slate' },
+  disabled: { label: 'Desativado', color: 'red' },
+}
+
+/** Itens que a TV pulou nos últimos 7 dias (mídias com problema). */
+function IssuesCard({ issues }) {
+  return (
+    <Card>
+      <CardTitle icon={AlertTriangle}>Itens pulados (7 dias)</CardTitle>
+      <p className="-mt-2 mb-3 text-sm text-slate-500">A TV pula o que não abre ou trava, para a programação não parar. Se um vídeo aparece aqui várias vezes, reenvie em H.264, 1080p.</p>
+      <ul className="divide-y divide-slate-100">
+        {issues.map((i, k) => {
+          const l = ISSUE_LABELS[i.reason] || { label: i.reason, color: 'slate' }
+          return (
+            <li key={k} className="flex items-start gap-3 py-2.5 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 font-medium text-slate-800">
+                  <span className="truncate">{i.name}</span>
+                  <Badge color={l.color}>{l.label}</Badge>
+                </p>
+                {i.detail && <p className="mt-0.5 text-xs text-slate-500">{i.detail}</p>}
+              </div>
+              <div className="shrink-0 text-right text-xs text-slate-500">
+                <b className="block text-sm text-slate-700">{i.total}×</b>
+                {timeAgo(i.last_at)}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
   )
 }
 

@@ -240,8 +240,29 @@ class ScreenController
             );
         }
 
+        // Itens pulados nos últimos 7 dias, agrupados por mídia e motivo
+        $issues = DB::all(
+            'SELECT pi.media_id, pi.integration_id, pi.reason, COUNT(*) AS total, MAX(pi.created_at) AS last_at,
+                    SUBSTRING_INDEX(GROUP_CONCAT(pi.detail ORDER BY pi.id DESC SEPARATOR \'\n\'), \'\n\', 1) AS detail,
+                    COALESCE(m.name, i.name) AS name, m.type AS media_type
+             FROM play_issues pi LEFT JOIN media m ON m.id = pi.media_id LEFT JOIN integrations i ON i.id = pi.integration_id
+             WHERE pi.screen_id = ? AND pi.created_at > ?
+             GROUP BY pi.media_id, pi.integration_id, pi.reason, m.name, i.name, m.type ORDER BY last_at DESC LIMIT 30',
+            [$sid, gmdate('Y-m-d H:i:s', time() - 7 * 86400)]
+        );
+
         respond([
             'screen' => $formatted,
+            'issues' => array_map(fn($r) => [
+                'media_id' => $r['media_id'] !== null ? (int)$r['media_id'] : null,
+                'integration_id' => $r['integration_id'] !== null ? (int)$r['integration_id'] : null,
+                'name' => $r['name'] ?? 'Item removido',
+                'media_type' => $r['media_type'],
+                'reason' => $r['reason'],
+                'detail' => $r['detail'],
+                'total' => (int)$r['total'],
+                'last_at' => $r['last_at'],
+            ], $issues),
             'schedules' => $schedules,
             'access' => $access,
             'timezone' => $ctx->org['timezone'],

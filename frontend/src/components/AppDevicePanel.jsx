@@ -135,7 +135,8 @@ export default function AppDevicePanel({ screen, onReload }) {
               value={`${d.cache_files ?? 0} arquivos · ${formatBytes(d.cache_bytes)}`}
               warn={d.cache_missing > 0}
             >
-              <p className="text-xs text-slate-500">{d.cache_missing > 0 ? `${d.cache_missing} ainda baixando — sem internet, elas não tocariam` : 'Tudo pronto para exibir sem internet'}</p>
+              <p className="text-xs text-slate-500">{d.cache_missing > 0 ? `${d.cache_missing} ainda baixando — só entram na programação depois de salvas` : 'Tudo pronto para exibir sem internet'}</p>
+              {d.cache_failed > 0 && <p className="text-xs text-amber-700">{d.cache_failed} com falha no download, tentando de novo{d.cache_error ? ` (${d.cache_error})` : ''}</p>}
             </Metric>
             <Metric icon={Power} label="Abrir ao ligar" value={d.autostart ? (d.can_autostart ? 'Ativo' : 'Ativo, falta permissão') : 'Desligado'} warn={d.autostart && !d.can_autostart}>
               {d.home_app && <p className="text-xs text-slate-500">Usado como tela inicial</p>}

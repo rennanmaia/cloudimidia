@@ -50,11 +50,42 @@ function localizeManifest(m) {
   const copy = JSON.parse(JSON.stringify(m))
   if (copy.organization) copy.organization.logo_url = loc(copy.organization.logo_url)
   for (const p of Object.values(copy.playlists || {})) {
-    for (const it of p.items || []) if (it.media) { it.media.url = loc(it.media.url); it.media.thumb_url = loc(it.media.thumb_url) }
+    for (const it of p.items || []) if (it.media) { it.media.src_url = it.media.url; it.media.url = loc(it.media.url); it.media.thumb_url = loc(it.media.thumb_url) }
     for (const sl of p.footer?.slots || []) if (sl.media) sl.media.url = loc(sl.media.url)
   }
   for (const i of Object.values(copy.integrations || {})) for (const t of i.tracks || []) t.url = loc(t.url)
   return { manifest: copy, media: [...media] }
+}
+
+/**
+ * Mídias já salvas no aparelho (app 1.0.1+). Enquanto uma mídia baixa, ela fica fora da vez
+ * em vez de tocar pela internet. null = app antigo, sem essa informação (toca tudo).
+ */
+function useCachedMedia(media) {
+  // undefined = ainda perguntando ao app
+  const [ready, setReady] = useState(undefined)
+  const stateUrl = NATIVE && RUNTIME.cacheBase ? RUNTIME.cacheBase.replace(/\/cache\?u=$/, '/cache/state') : null
+  useEffect(() => {
+    if (!stateUrl || !media.length) return
+    let stop = false
+    let timer
+    const check = async () => {
+      let missing = 1
+      try {
+        const r = await fetch(stateUrl, { cache: 'no-store' })
+        if (r.status === 404) { setReady(null); return } // app antigo
+        const s = await r.json()
+        const next = new Set(s.ready || [])
+        // Conta pelo manifesto (o app pode ainda não ter recebido a lista)
+        missing = media.filter((u) => !next.has(u)).length
+        setReady((prev) => (prev && prev.size === next.size && [...next].every((u) => prev.has(u)) ? prev : next))
+      } catch { /* servidor local reiniciando */ }
+      if (!stop) timer = setTimeout(check, missing ? 4000 : 60000)
+    }
+    check()
+    return () => { stop = true; clearTimeout(timer) }
+  }, [stateUrl, media])
+  return ready
 }
 
 function deviceKey() {
@@ -182,6 +213,7 @@ function Runtime({ token, onUnpaired }) {
   const [online, setOnline] = useState(true)
   const [identify, setIdentify] = useState(false)
   const logs = useRef([])
+  const issues = useRef([])
   const nowPlaying = useRef('')
   const versionRef = useRef(manifest?.version)
   const startedAt = useRef(Date.now())
@@ -201,8 +233,9 @@ function Runtime({ token, onUnpaired }) {
 
   const heartbeat = useCallback(async () => {
     const sending = logs.current.splice(0, 200)
+    const sendingIssues = issues.current.splice(0, 50)
     try {
-      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, info: deviceInfo(), native: bridge.diag } })
+      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, issues: sendingIssues, info: deviceInfo(), native: bridge.diag } })
       setOnline(true)
       if (r.version !== versionRef.current) fetchManifest()
       for (const c of r.commands || []) {
@@ -219,6 +252,8 @@ function Runtime({ token, onUnpaired }) {
     } catch (e) {
       logs.current.unshift(...sending)
       if (logs.current.length > 2000) logs.current.length = 2000
+      issues.current.unshift(...sendingIssues)
+      if (issues.current.length > 200) issues.current.length = 200
       if (e.status === 401) onUnpaired()
       else setOnline(false)
     }
@@ -244,7 +279,19 @@ function Runtime({ token, onUnpaired }) {
   useEffect(() => {
     bridge.post({ type: 'status', paired: true, token, online, screenName: manifest?.screen?.name || null })
   }, [token, online, manifest?.screen?.name])
+  const cachedMedia = useCachedMedia(view.media)
+  // Espera (até 3 s) saber o que já está salvo antes de começar, para não tocar pela internet à toa
+  const [cacheWait, setCacheWait] = useState(true)
+  useEffect(() => { const t = setTimeout(() => setCacheWait(false), 3000); return () => clearTimeout(t) }, [])
+  const cacheKnown = cachedMedia !== undefined || !cacheWait || !NATIVE || !view.media.length
   const onPlayed = useCallback((log) => { logs.current.push(log); if (logs.current.length > 2000) logs.current.shift() }, [])
+  // Itens pulados (erro, travou, não começou): vão para o painel, na página da TV
+  const onIssue = useCallback((issue) => {
+    const last = issues.current[issues.current.length - 1]
+    if (last && last.media_id === issue.media_id && last.integration_id === issue.integration_id && last.reason === issue.reason && issue.at - last.at < 60000) return
+    issues.current.push(issue)
+    if (issues.current.length > 200) issues.current.shift()
+  }, [])
   const onNowPlaying = useCallback((name) => { nowPlaying.current = name || '' }, [])
 
   if (!manifest) {
@@ -261,7 +308,7 @@ function Runtime({ token, onUnpaired }) {
     <div style={S.full}>
       <div style={wrapStyle}>
         {manifest.screen?.is_active ? (
-          <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onNowPlaying={onNowPlaying} identify={identify} />
+          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
         ) : (
           <div className="cm-stage cm-off">
             {identify && <div className="cm-identify"><small>Esta TV é</small><b>{manifest.screen?.name}</b></div>}

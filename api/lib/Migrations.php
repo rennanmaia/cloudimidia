@@ -8,7 +8,21 @@ declare(strict_types=1);
  */
 class Migrations
 {
-    public const VERSION = 5;
+    public const VERSION = 6;
+
+    public const PLAY_ISSUES_SQL = 'CREATE TABLE IF NOT EXISTS play_issues (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id INT UNSIGNED NOT NULL,
+  screen_id INT UNSIGNED NOT NULL,
+  media_id INT UNSIGNED NULL,
+  integration_id INT UNSIGNED NULL,
+  reason VARCHAR(20) NOT NULL,
+  detail VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  KEY ix_play_issues_screen (screen_id, created_at),
+  CONSTRAINT fk_play_issues_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  CONSTRAINT fk_play_issues_screen FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const ORG_CREDENTIALS_SQL = 'CREATE TABLE IF NOT EXISTS org_credentials (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -72,6 +86,9 @@ class Migrations
 
         // v5: chaves de integrações externas (ex.: FutDigital)
         DB::pdo()->exec(self::ORG_CREDENTIALS_SQL);
+
+        // v6: itens pulados nas TVs (erro, travou, não começou)
+        DB::pdo()->exec(self::PLAY_ISSUES_SQL);
 
         if (!is_dir(STORAGE_DIR)) {
             @mkdir(STORAGE_DIR, 0775, true);

@@ -241,6 +241,8 @@ class CloudiDeviceModule(private val rc: ReactApplicationContext) : ReactContext
             m.putDouble("cache_bytes", (cache["bytes"] as Long).toDouble())
             m.putInt("cache_downloading", cache["downloading"] as Int)
             m.putInt("cache_missing", cache["missing"] as Int)
+            m.putInt("cache_failed", cache["failed"] as Int)
+            m.putString("cache_error", cache["last_error"] as String)
 
             m.putDouble("uptime", (SystemClock.elapsedRealtime() / 1000).toDouble())
             m.putDouble("app_uptime", ((SystemClock.elapsedRealtime() - startedAt) / 1000).toDouble())

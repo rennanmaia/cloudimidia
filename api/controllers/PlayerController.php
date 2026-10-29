@@ -149,6 +149,26 @@ class PlayerController
             }
         }
 
+        // Itens pulados pela TV (para achar mídias com problema)
+        $issues = input('issues');
+        if (is_array($issues)) {
+            foreach (array_slice($issues, 0, 50) as $i) {
+                if (!is_array($i) || !in_array($i['reason'] ?? '', ['error', 'stalled', 'timeout', 'empty', 'disabled'], true)) continue;
+                $ts = isset($i['at']) && is_numeric($i['at']) ? (int)floor($i['at'] / 1000) : time();
+                if ($ts < time() - 7 * 86400 || $ts > time() + 600) $ts = time();
+                DB::insert('play_issues', [
+                    'organization_id' => $screen['organization_id'],
+                    'screen_id' => $sid,
+                    'media_id' => int_or_null($i['media_id'] ?? null),
+                    'integration_id' => int_or_null($i['integration_id'] ?? null),
+                    'reason' => $i['reason'],
+                    'detail' => is_string($i['detail'] ?? null) ? mb_substr($i['detail'], 0, 255) : null,
+                    'created_at' => gmdate('Y-m-d H:i:s', $ts),
+                ]);
+            }
+            if (mt_rand(1, 200) === 1) DB::exec('DELETE FROM play_issues WHERE created_at < ?', [gmdate('Y-m-d H:i:s', time() - 30 * 86400)]);
+        }
+
         $commands = DB::all('SELECT id, command, payload FROM screen_commands WHERE screen_id = ? AND delivered_at IS NULL ORDER BY id', [$sid]);
         if ($commands) {
             DB::exec('UPDATE screen_commands SET delivered_at = ? WHERE id IN (' . DB::in(array_column($commands, 'id')) . ')', array_merge([now()], array_column($commands, 'id')));
@@ -168,7 +188,7 @@ class PlayerController
         $d = input('native');
         if (!is_array($d)) return null;
         $keys = ['app_version', 'app_version_code', 'player_version', 'android', 'model', 'webview', 'mem_total', 'mem_free', 'mem_low',
-            'storage_total', 'storage_free', 'cache_files', 'cache_bytes', 'cache_downloading', 'cache_missing', 'uptime', 'app_uptime',
+            'storage_total', 'storage_free', 'cache_files', 'cache_bytes', 'cache_downloading', 'cache_missing', 'cache_failed', 'cache_error','uptime', 'app_uptime',
             'autostart', 'can_autostart', 'home_app', 'can_install', 'network', 'wifi_signal', 'wifi_rssi', 'ip'];
         $out = [];
         foreach ($keys as $k) {

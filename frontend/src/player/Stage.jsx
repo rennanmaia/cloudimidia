@@ -10,10 +10,21 @@ import './player.css'
 
 const DEFAULTS = { weather: 15, sports: 20, currency: 15, clock: 10, text: 12, webpage: 30, youtube: 60 }
 
-function isPlayable(item, integrations) {
-  if (item.type === 'media') return item.kind === 'image' || item.kind === 'video'
+/** cached: mídias já salvas no aparelho (app); as que ainda baixam ficam fora da vez. */
+function isPlayable(item, integrations, cached) {
+  if (item.type === 'media') {
+    if (item.kind !== 'image' && item.kind !== 'video') return false
+    return !cached || !item.media?.src_url || cached.has(item.media.src_url)
+  }
   const integ = integrations?.[item.integration_id]
   return !!integ && integ.type !== 'music'
+}
+
+const MEDIA_ERRORS = {
+  1: 'Carregamento interrompido',
+  2: 'Falha de rede ao carregar o vídeo',
+  3: 'O aparelho não conseguiu decodificar o vídeo (formato ou resolução pesados demais)',
+  4: 'Formato de vídeo não suportado pelo aparelho',
 }
 
 function itemDuration(item, integrations) {
@@ -25,25 +36,44 @@ function itemDuration(item, integrations) {
 }
 
 /* ---------------- Itens ---------------- */
-function ImageItem({ item, onEnd, duration }) {
+/*
+ * Cada item avisa onReady quando já está desenhado; só então a camada aparece
+ * (até lá continua a imagem anterior, sem tela preta). onEnd({ reason, detail }) = item pulado.
+ */
+function ImageItem({ item, onEnd, onReady, duration, shown }) {
   const fit = item.settings?.fit || 'cover'
   useEffect(() => {
-    const t = setTimeout(onEnd, duration * 1000)
+    if (!shown) return
+    const t = setTimeout(() => onEnd(), duration * 1000)
     return () => clearTimeout(t)
-  }, [onEnd, duration])
+  }, [onEnd, duration, shown])
+  // Imagem que não carrega nem dá erro
+  useEffect(() => {
+    if (shown) return
+    const t = setTimeout(() => onEnd({ reason: 'timeout', detail: 'A imagem não carregou em 15 s' }), 15000)
+    return () => clearTimeout(t)
+  }, [onEnd, shown])
   return (
     <>
       {fit === 'contain' && <img className="cm-blur-bg" src={item.media.url} alt="" />}
-      <img className={`cm-media cm-fit-${fit}`} src={item.media.url} alt="" style={{ position: 'relative' }} onError={() => setTimeout(onEnd, 1000)} />
+      <img
+        className={`cm-media cm-fit-${fit}`}
+        src={item.media.url}
+        alt=""
+        style={{ position: 'relative' }}
+        onLoad={onReady}
+        onError={() => onEnd({ reason: 'error', detail: 'A imagem não pôde ser aberta' })}
+      />
     </>
   )
 }
 
-function VideoItem({ item, onEnd, duration, muted, leaving, onSound }) {
+function VideoItem({ item, onEnd, onReady, shown, duration, muted, leaving, onSound }) {
   const ref = useRef(null)
   const fit = item.settings?.fit || 'contain'
   const wantMuted = muted || !!item.settings?.muted
   const lastTime = useRef({ t: -1, at: Date.now() })
+  const started = useRef(false)
 
   useEffect(() => {
     const v = ref.current
@@ -53,10 +83,11 @@ function VideoItem({ item, onEnd, duration, muted, leaving, onSound }) {
     const p = v.play()
     if (p?.catch) {
       p.catch(() => {
+        if (v.error) return // o onError do vídeo já cuida (com o motivo certo)
         // Navegador bloqueou som automático: toca sem som
         v.muted = true
         onSound?.(false)
-        v.play().catch(() => setTimeout(onEnd, 2000))
+        v.play().catch(() => !v.error && setTimeout(() => onEnd({ reason: 'error', detail: 'O aparelho recusou tocar o vídeo' }), 1000))
       })
     }
     if (!wantMuted) onSound?.(true)
@@ -65,19 +96,27 @@ function VideoItem({ item, onEnd, duration, muted, leaving, onSound }) {
 
   // Limite de duração definido na playlist + proteção contra travamentos
   useEffect(() => {
+    if (leaving || !shown || !duration) return
+    const t = setTimeout(() => onEnd(), duration * 1000)
+    return () => clearTimeout(t)
+  }, [leaving, shown, duration, onEnd])
+
+  useEffect(() => {
     if (leaving) return
-    const timers = []
-    if (duration) timers.push(setTimeout(onEnd, duration * 1000))
     const maxLen = (item.media?.duration || 600) + 20
-    timers.push(setTimeout(onEnd, maxLen * 1000))
+    const guard = setTimeout(() => onEnd(), maxLen * 1000)
     const watchdog = setInterval(() => {
       const v = ref.current
       if (!v) return
       if (v.currentTime !== lastTime.current.t) lastTime.current = { t: v.currentTime, at: Date.now() }
-      else if (Date.now() - lastTime.current.at > 20000) onEnd()
+      else if (Date.now() - lastTime.current.at > (started.current ? 20000 : 15000)) {
+        onEnd(started.current
+          ? { reason: 'stalled', detail: `Parou em ${Math.round(v.currentTime)} s e não voltou a tocar` }
+          : { reason: 'timeout', detail: 'O vídeo não começou a tocar em 15 s' })
+      }
     }, 5000)
-    return () => { timers.forEach(clearTimeout); clearInterval(watchdog) }
-  }, [leaving, duration, onEnd, item.media?.duration])
+    return () => { clearTimeout(guard); clearInterval(watchdog) }
+  }, [leaving, onEnd, item.media?.duration])
 
   return (
     <video
@@ -89,14 +128,19 @@ function VideoItem({ item, onEnd, duration, muted, leaving, onSound }) {
       preload="auto"
       muted={wantMuted}
       data-sound={!wantMuted && !leaving ? '1' : undefined}
-      onEnded={onEnd}
-      onError={() => setTimeout(onEnd, 1500)}
+      onPlaying={() => { started.current = true; onReady() }}
+      onEnded={() => onEnd()}
+      onError={() => {
+        const code = ref.current?.error?.code
+        setTimeout(() => onEnd({ reason: 'error', detail: MEDIA_ERRORS[code] || 'O vídeo não pôde ser aberto' }), 1000)
+      }}
     />
   )
 }
 
-function WidgetItem({ item, integration, fetchData, onEnd, duration, timezone, muted }) {
+function WidgetItem({ item, integration, fetchData, onEnd, onReady, duration, timezone, muted }) {
   const data = useIntegrationData(integration, fetchData)
+  useEffect(() => { onReady() }, [onReady])
   // FutDigital sem duração fixa: o próprio widget avisa quando mostrou todas as páginas
   const auto = integration.type === 'futdigital' && !item.duration
   useEffect(() => {
@@ -176,7 +220,7 @@ export function IdleScreen({ org, message = 'Aguardando programação' }) {
  * - onPlayed(log): chamado ao fim de cada item (comprovação de exibição)
  * - onNowPlaying(texto)
  */
-export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, identify }) {
+export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMedia, onNowPlaying, identify }) {
   const integrations = manifest?.integrations || {}
   const muted = !!manifest?.screen?.muted
   const [program, setProgram] = useState(() => resolveProgram(manifest))
@@ -188,6 +232,8 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
   refs.current.manifest = manifest
   refs.current.program = program
   refs.current.onPlayed = onPlayed
+  refs.current.onIssue = onIssue
+  refs.current.cached = cachedMedia
 
   // Reavalia a grade periodicamente e quando o manifesto muda
   useEffect(() => {
@@ -209,34 +255,45 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
     const st = refs.current
     const { playlists = {}, integrations: ints = {} } = st.manifest || {}
     const prog = st.program
-    const playable = (pl) => (pl?.items || []).filter((it) => isPlayable(it, ints))
+    // Próximo item exibível depois da posição `last` (posição na playlist completa, para a
+    // ordem não pular quando uma mídia termina de baixar). strict: só mídias já salvas no aparelho.
+    const nextIn = (pl, last, strict = true) => {
+      const items = pl?.items || []
+      for (let k = 1; k <= items.length; k++) {
+        const j = (last + k) % items.length
+        if (isPlayable(items[j], ints, strict ? st.cached : null)) return j
+      }
+      return -1
+    }
+    const hasPlayable = (pl) => nextIn(pl, -1) >= 0
     while (st.queue.length) {
       const q = st.queue.shift()
       if (playlists[q.playlist.id]) return q
     }
     const base = prog.base ? playlists[prog.base.playlistId] : null
-    const baseItems = playable(base)
-    const pushInserts = (force) => {
+    let idx = base ? nextIn(base, st.baseIdx[base.id] ?? -1) : -1
+    // Nada salvo ainda: melhor tocar pela internet do que deixar a tela parada
+    if (base && idx < 0 && !prog.inserts.some((s) => hasPlayable(playlists[s.playlist_id]))) idx = nextIn(base, st.baseIdx[base.id] ?? -1, false)
+    const pushInserts = (force, strict = true) => {
       prog.inserts.forEach((s) => {
         if (!force && st.since % Math.max(1, s.insert_every) !== 0) return
         const pl = playlists[s.playlist_id]
-        const its = playable(pl)
-        if (!its.length) return
-        const j = ((st.insertIdx[s.id] ?? -1) + 1) % its.length
+        const j = nextIn(pl, st.insertIdx[s.id] ?? -1, strict)
+        if (j < 0) return
         st.insertIdx[s.id] = j
-        st.queue.push({ item: its[j], playlist: pl, scheduleId: s.id })
+        st.queue.push({ item: pl.items[j], playlist: pl, scheduleId: s.id })
       })
     }
-    if (baseItems.length) {
-      const idx = ((st.baseIdx[base.id] ?? -1) + 1) % baseItems.length
+    if (idx >= 0) {
       st.baseIdx[base.id] = idx
       st.since++
       pushInserts(false)
-      return { item: baseItems[idx], playlist: base, scheduleId: prog.base.scheduleId }
+      return { item: base.items[idx], playlist: base, scheduleId: prog.base.scheduleId }
     }
     // Sem programação base: exibe apenas as campanhas
     if (prog.inserts.length) {
       pushInserts(true)
+      if (!st.queue.length) pushInserts(true, false)
       return st.queue.shift() || null
     }
     return null
@@ -245,18 +302,17 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
   const advance = useCallback(() => {
     const st = refs.current
     const prev = st.current
-    if (prev && st.onPlayed) {
-      const secs = Math.round((Date.now() - st.startedAt) / 1000)
-      if (secs >= 1) {
-        st.onPlayed({
-          media_id: prev.item.type === 'media' ? prev.item.media?.id : null,
-          integration_id: prev.item.type === 'integration' ? prev.item.integration_id : null,
-          playlist_id: prev.playlist?.id,
-          schedule_id: prev.scheduleId,
-          started_at: st.startedAt,
-          duration: secs,
-        })
+    if (prev) {
+      const ids = {
+        media_id: prev.item.type === 'media' ? prev.item.media?.id : null,
+        integration_id: prev.item.type === 'integration' ? prev.item.integration_id : null,
+        playlist_id: prev.playlist?.id,
+        schedule_id: prev.scheduleId,
       }
+      const secs = prev.shownAt ? Math.round((Date.now() - prev.shownAt) / 1000) : 0
+      if (prev.issue) st.onIssue?.({ ...ids, reason: prev.issue.reason, detail: prev.issue.detail || '', shown: secs, at: Date.now() })
+      // Só conta como exibição o que apareceu na tela
+      if (st.onPlayed && secs >= 1) st.onPlayed({ ...ids, started_at: prev.shownAt, duration: secs })
     }
     const next = pickNext()
     st.startedAt = Date.now()
@@ -266,12 +322,32 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
     setCurrent(entry)
   }, [pickNext])
 
-  // Função de término estável por item (evita reiniciar temporizadores)
+  // Camada aparece quando o item está desenhado; a anterior sai depois da transição
+  const showLayer = useCallback((key) => {
+    setLayers((ls) => (ls.some((l) => l.key === key && !l.shown) ? ls.map((l) => (l.key === key ? { ...l, shown: true } : l)) : ls))
+    const cur = refs.current.current
+    if (cur?.key === key && !cur.shownAt) cur.shownAt = Date.now()
+    setTimeout(() => setLayers((ls) => ls.filter((l) => !(l.leaving && l.key < key))), 1100)
+  }, [])
+
+  // Funções estáveis por item (evita reiniciar temporizadores)
   const endFor = useCallback((key) => {
     const fns = refs.current.endFns
-    if (!fns.has(key)) fns.set(key, () => { if (refs.current.current?.key === key) advance() })
+    if (!fns.has(key)) {
+      fns.set(key, {
+        end: (info) => {
+          const cur = refs.current.current
+          if (cur?.key !== key) return
+          if (!info?.reason) return advance()
+          // Item com problema: pequena pausa evita repetir sem parar se a playlist só tem ele
+          cur.issue = info
+          setTimeout(() => { if (refs.current.current?.key === key) advance() }, 800)
+        },
+        ready: () => showLayer(key),
+      })
+    }
     return fns.get(key)
-  }, [advance])
+  }, [advance, showLayer])
 
   // Troca imediata quando a programação muda (início/fim de um horário)
   const sig = programSignature(program)
@@ -287,8 +363,13 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
   // Camadas para transição suave
   useEffect(() => {
     if (!current) { setLayers([]); return }
-    setLayers((ls) => [...ls.filter((l) => l.key !== current.key).slice(-1).map((l) => ({ ...l, leaving: true })), { key: current.key, entry: current }])
-    const t = setTimeout(() => setLayers((ls) => ls.filter((l) => !l.leaving)), 1100)
+    // Fica na tela a última camada que chegou a aparecer, até a nova estar pronta
+    setLayers((ls) => [
+      ...ls.filter((l) => l.key !== current.key && l.shown).slice(-1).map((l) => ({ ...l, leaving: true })),
+      { key: current.key, entry: current, shown: false },
+    ])
+    // Se o item demorar a avisar, aparece assim mesmo
+    const t = setTimeout(() => showLayer(current.key), 8000)
     onNowPlaying?.(current.item.name)
     return () => clearTimeout(t)
   }, [current]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -301,19 +382,24 @@ export default function Stage({ manifest, fetchData, onPlayed, onNowPlaying, ide
     <div className="cm-stage">
       <div className="cm-main">
         {!current && <IdleScreen org={manifest?.organization} />}
-        {layers.map(({ key, entry, leaving }) => {
+        {layers.map(({ key, entry, leaving, shown }) => {
           const { item, playlist } = entry
           const transition = playlist?.transition || 'fade'
-          const end = endFor(key)
+          const { end, ready } = endFor(key)
           const duration = itemDuration(item, integrations)
+          const common = { item, onEnd: end, onReady: ready, shown }
           let content = null
-          if (item.type === 'media' && item.kind === 'image') content = <ImageItem item={item} onEnd={end} duration={duration} />
-          else if (item.type === 'media' && item.kind === 'video') content = <VideoItem item={item} onEnd={end} duration={item.duration} muted={muted} leaving={leaving} onSound={setVideoSound} />
+          if (item.type === 'media' && item.kind === 'image') content = <ImageItem {...common} duration={duration} />
+          else if (item.type === 'media' && item.kind === 'video') content = <VideoItem {...common} duration={item.duration} muted={muted} leaving={leaving} onSound={setVideoSound} />
           else if (item.type === 'integration' && integrations[item.integration_id]) {
-            content = <WidgetItem item={item} integration={integrations[item.integration_id]} fetchData={fetchData} onEnd={end} duration={duration} timezone={manifest?.organization?.timezone} muted={muted} />
+            content = <WidgetItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} duration={duration} timezone={manifest?.organization?.timezone} muted={muted} />
           }
           return (
-            <div key={key} className={`cm-layer ${!leaving && transition !== 'none' ? `enter-${transition}` : ''}`} style={{ zIndex: leaving ? 1 : 2 }}>
+            <div
+              key={key}
+              className={`cm-layer ${shown && !leaving && transition !== 'none' ? `enter-${transition}` : ''}`}
+              style={{ zIndex: leaving ? 1 : 2, opacity: shown ? undefined : 0 }}
+            >
               {content}
             </div>
           )

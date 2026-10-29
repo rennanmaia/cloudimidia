@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Upload, X, CheckCircle2, AlertCircle, FileVideo, FileImage, FileAudio } from 'lucide-react'
+import { Upload, X, CheckCircle2, AlertCircle, AlertTriangle, FileVideo, FileImage, FileAudio } from 'lucide-react'
 import { uploadChunked } from '../lib/api'
-import { extractMeta, mediaKind } from '../lib/media'
+import { extractMeta, mediaKind, videoWarnings } from '../lib/media'
 import { formatBytes } from '../lib/format'
 import { cn, ProgressBar } from './ui'
 
@@ -36,13 +36,18 @@ export function useUploader(orgId, onUploaded) {
       ;(async () => {
         try {
           const { meta, thumbnail } = await extractMeta(item.file)
+          if (item.kind === 'video') {
+            const warnings = await videoWarnings(item.file, meta)
+            if (warnings.length) patch(item.id, { warnings })
+          }
           if (item.status !== 'uploading') throw Object.assign(new Error('Envio cancelado.'), { status: -1 })
           const h = uploadChunked(orgId, item.file, { meta, thumbnail, onProgress: (p) => patch(item.id, { progress: p }) })
           handles.current[item.id] = h
           const res = await h.promise
           patch(item.id, { status: 'done', progress: 1 })
           cb.current?.(res.media)
-          setTimeout(() => remove(item.id), 2500)
+          // Com aviso, fica na lista até a pessoa fechar
+          if (!item.warnings?.length) setTimeout(() => remove(item.id), 2500)
         } catch (e) {
           patch(item.id, { status: e.status === -1 ? 'cancelled' : 'error', error: e.message })
         } finally {
@@ -107,8 +112,11 @@ export function UploadQueue({ queue, cancel, dismiss }) {
               ) : (
                 <ProgressBar value={it.progress} className="mt-1.5 h-1.5" />
               )}
+              {it.warnings?.map((w) => (
+                <p key={w} className="mt-1 flex items-start gap-1 text-xs text-amber-700"><AlertTriangle className="mt-px size-3.5 shrink-0" />{w}</p>
+              ))}
             </div>
-            {it.status !== 'done' && (
+            {(it.status !== 'done' || it.warnings?.length > 0) && (
               <button type="button" onClick={() => (it.status === 'uploading' || it.status === 'waiting' ? cancel(it.id) : dismiss(it.id))} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Cancelar">
                 <X className="size-4" />
               </button>

@@ -6,13 +6,13 @@ declare(strict_types=1);
  */
 class Integrations
 {
-    public const TYPES = ['rss', 'weather', 'sports', 'currency', 'clock', 'text', 'webpage', 'youtube', 'music', 'futdigital'];
+    public const TYPES = ['rss', 'weather', 'sports', 'currency', 'clock', 'text', 'webpage', 'youtube', 'music', 'futdigital', 'futdigital_slot'];
 
     /** Páginas que a integração FutDigital pode exibir */
     public const FUTDIGITAL_VIEWS = ['live', 'today', 'results', 'upcoming', 'standings', 'scorers'];
 
     /** Tipos cujos dados são buscados no servidor (com cache), em segundos */
-    private const TTL = ['rss' => 600, 'weather' => 1200, 'sports' => 120, 'currency' => 300, 'futdigital' => 60];
+    private const TTL = ['rss' => 600, 'weather' => 1200, 'sports' => 120, 'currency' => 300, 'futdigital' => 60, 'futdigital_slot' => 30];
 
     public const SPORTS_LEAGUES = [
         'soccer/bra.1' => 'Brasileirão Série A',
@@ -112,6 +112,26 @@ class Integrations
                     'page_duration' => $int('page_duration', 5, 60, 10),
                     'title' => $str('title', 80),
                 ];
+            case 'futdigital_slot':
+                // Slot de telão: página pronta do FutDigital. slot_id/slot_url são gravados pelo servidor.
+                $views = array_values(array_unique(array_intersect(array_map('strval', (array)($c['views'] ?? [])), FutDigitalClient::VIEWS)));
+                $sourceType = ($c['source_type'] ?? '') === 'arena' ? 'arena' : 'competition';
+                $sourceId = $int('source_id', 0, PHP_INT_MAX, 0);
+                if (!$sourceId) abort($sourceType === 'arena' ? 'Escolha a arena.' : 'Escolha o campeonato.', 422);
+                $duration = (int)($c['duration_seconds'] ?? 15);
+                return [
+                    'source_type' => $sourceType,
+                    'source_id' => $sourceId,
+                    'source_name' => $str('source_name', 200),
+                    'source_image' => $str('source_image', 1000),
+                    'orientation' => in_array($c['orientation'] ?? '', FutDigitalClient::ORIENTATIONS, true) ? $c['orientation'] : 'auto',
+                    'duration_seconds' => in_array($duration, [10, 15, 20, 30], true) ? $duration : 15,
+                    'views' => $views ?: FutDigitalClient::VIEWS,
+                    'per_screen' => $int('per_screen', 0, 4, 0),
+                    'upcoming_days' => $int('upcoming_days', 1, 30, 7),
+                    'show_qr' => $bool('show_qr', true),
+                    'skip_when_empty' => $bool('skip_when_empty', true),
+                ];
         }
         abort('Tipo de integração inválido.', 422);
     }
@@ -158,6 +178,9 @@ class Integrations
 
         try {
             $data = self::fetch($type, $config, (int)($integration['organization_id'] ?? 0));
+            if ($type === 'futdigital_slot' && ($data['status'] ?? '') === 'disabled' && (decode_json($cache['data'] ?? null, [])['status'] ?? '') !== 'disabled') {
+                log_activity((int)$integration['organization_id'], 'integration.disabled', "Slot FutDigital \"{$integration['name']}\" foi desativado no FutDigital e saiu das TVs. Abra a integração e salve para criar um novo.");
+            }
             DB::exec(
                 'REPLACE INTO integration_cache (integration_id, config_hash, data, error, fetched_at) VALUES (?,?,?,NULL,?)',
                 [$id, $hash, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), now()]
@@ -177,6 +200,7 @@ class Integrations
     {
         switch ($type) {
             case 'futdigital': return self::futdigital($c, $orgId);
+            case 'futdigital_slot': return self::futdigitalSlot($c);
             case 'rss': return self::rss($c);
             case 'weather': return self::weather($c);
             case 'sports': return self::sports($c);
@@ -433,15 +457,34 @@ class Integrations
     /** Chamada à API de parceiros do FutDigital. Retorna o conteúdo de "data" ou lança a mensagem de erro da API. */
     public static function futdigitalApi(string $key, string $path, array $query = [])
     {
-        $url = 'https://fut.digital/api/v1/partner/' . ltrim($path, '/') . ($query ? '?' . http_build_query($query) : '');
-        $status = 0;
-        $body = self::httpGet($url, 15, ['Authorization: Bearer ' . $key, 'Accept: application/json'], false, $status);
-        $j = json_decode($body, true);
-        if ($status >= 400 || !is_array($j) || !array_key_exists('data', $j)) {
-            $msg = is_array($j) ? ($j['error']['message'] ?? $j['error'] ?? null) : null;
-            throw new RuntimeException(is_string($msg) && $msg !== '' ? $msg : "resposta inesperada (HTTP $status)");
+        return (new FutDigitalClient($key))->request('GET', $path, $query);
+    }
+
+    /** Situação do slot de telão: se há jogos para mostrar (para pular a inserção) ou se foi desativado. */
+    public static function futdigitalSlot(array $c): array
+    {
+        $token = FutDigitalClient::tokenFromUrl((string)($c['slot_url'] ?? ''));
+        if ($token === '') throw new RuntimeException('Slot ainda não criado no FutDigital. Salve a integração de novo.');
+        try {
+            $d = FutDigitalClient::slotContent($token);
+        } catch (FutDigitalError $e) {
+            if ($e->status === 404) {
+                return ['status' => 'disabled', 'has_content' => false, 'message' => 'O slot foi desativado ou trocado no FutDigital.', 'fetched_at' => gmdate('c')];
+            }
+            throw $e;
         }
-        return $j['data'];
+        $counts = [];
+        foreach (FutDigitalClient::VIEWS as $v) $counts[$v] = count((array)($d[$v] ?? []));
+        $has = false;
+        foreach ($c['views'] ?? FutDigitalClient::VIEWS as $v) $has = $has || ($counts[$v] ?? 0) > 0;
+        if (isset($d['has_content'])) $has = (bool)$d['has_content'];
+        return [
+            'status' => 'ok',
+            'has_content' => $has,
+            'counts' => $counts,
+            'source' => ['type' => $d['source']['type'] ?? null, 'name' => $d['source']['name'] ?? null, 'image_url' => $d['source']['image_url'] ?? null],
+            'fetched_at' => gmdate('c'),
+        ];
     }
 
     private static function fdTeam(array $t, $score, $pens): array

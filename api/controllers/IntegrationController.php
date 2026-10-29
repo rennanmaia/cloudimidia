@@ -42,6 +42,42 @@ class IntegrationController
         return $config;
     }
 
+    /**
+     * Cria (POST) ou altera (PATCH) o slot de telão no FutDigital e grava slot_id/slot_url na config.
+     * Se o slot sumiu do FutDigital (404), cria outro.
+     */
+    private static function syncSlot(OrgCtx $ctx, string $name, array $config, ?array $old = null): array
+    {
+        $org = DB::one('SELECT name FROM organizations WHERE id = ?', [$ctx->id()]);
+        $fields = [
+            'name' => mb_substr(($org['name'] ?? 'CloudiMídia') . ' • ' . $name, 0, 150),
+            'source_type' => $config['source_type'],
+            'source_id' => $config['source_id'],
+            'orientation' => $config['orientation'],
+            'duration_seconds' => $config['duration_seconds'],
+            'views' => $config['views'],
+            'upcoming_days' => $config['upcoming_days'],
+            'show_qr' => $config['show_qr'],
+        ];
+        try {
+            $client = FutDigitalClient::forOrg($ctx->id());
+            $slot = null;
+            $oldId = (int)($old['slot_id'] ?? 0);
+            if ($oldId) {
+                try {
+                    $slot = $client->updateSlot($oldId, $fields + ['is_active' => true]);
+                } catch (FutDigitalError $e) {
+                    if ($e->status !== 404) throw $e;
+                }
+            }
+            if (!$slot) $slot = $client->createSlot($fields);
+        } catch (Throwable $e) {
+            abort('O FutDigital não aceitou o slot: ' . $e->getMessage(), 422);
+        }
+        if (empty($slot['id']) || empty($slot['url'])) abort('O FutDigital não devolveu o endereço do slot.', 502);
+        return $config + ['slot_id' => (int)$slot['id'], 'slot_url' => (string)$slot['url']];
+    }
+
     public static function store($org): void
     {
         $ctx = org_ctx($org);
@@ -49,11 +85,13 @@ class IntegrationController
         required(['name' => 'o nome', 'type' => 'o tipo']);
         $type = str_input('type', 30);
         if (!in_array($type, Integrations::TYPES, true)) abort('Tipo de integração inválido.', 422);
+        $config = self::validConfig($ctx, $type);
+        if ($type === 'futdigital_slot') $config = self::syncSlot($ctx, str_input('name', 120), $config);
         $id = DB::insert('integrations', [
             'organization_id' => $ctx->id(),
             'type' => $type,
             'name' => str_input('name', 120),
-            'config' => json_encode(self::validConfig($ctx, $type), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'config' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'created_by' => $ctx->userId(),
             'created_at' => now(),
             'updated_at' => now(),
@@ -67,9 +105,14 @@ class IntegrationController
         $ctx = org_ctx($org);
         $row = self::find($ctx, $id, true);
         required(['name' => 'o nome']);
+        $config = self::validConfig($ctx, $row['type']);
+        if ($row['type'] === 'futdigital_slot') {
+            $config = self::syncSlot($ctx, str_input('name', 120), $config, decode_json($row['config']));
+            DB::exec('DELETE FROM integration_cache WHERE integration_id = ?', [$row['id']]);
+        }
         DB::update('integrations', [
             'name' => str_input('name', 120),
-            'config' => json_encode(self::validConfig($ctx, $row['type']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'config' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'updated_at' => now(),
         ], 'id = ?', [$row['id']]);
         respond(['integration' => Integrations::format(DB::one('SELECT * FROM integrations WHERE id = ?', [$row['id']]))]);
@@ -79,6 +122,16 @@ class IntegrationController
     {
         $ctx = org_ctx($org);
         $row = self::find($ctx, $id, true);
+        if ($row['type'] === 'futdigital_slot') {
+            $slotId = (int)(decode_json($row['config'])['slot_id'] ?? 0);
+            try {
+                if ($slotId) FutDigitalClient::forOrg($ctx->id())->deleteSlot($slotId);
+            } catch (FutDigitalError $e) {
+                if ($e->status !== 404) abort('Não foi possível excluir o slot no FutDigital: ' . $e->getMessage(), 502);
+            } catch (Throwable $e) {
+                // Sem chave cadastrada: exclui só aqui
+            }
+        }
         DB::exec('DELETE FROM integrations WHERE id = ?', [$row['id']]);
         log_activity($ctx->id(), 'integration.deleted', "Integração \"{$row['name']}\" excluída");
         respond(['ok' => true]);

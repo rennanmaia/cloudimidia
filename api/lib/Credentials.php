@@ -11,7 +11,7 @@ class Credentials
     public const PROVIDERS = [
         'futdigital' => [
             'name' => 'FutDigital',
-            'description' => 'Jogos, resultados, classificação e artilharia dos campeonatos liberados para a sua chave de parceiro.',
+            'description' => 'Jogos, resultados, classificação, artilharia e slots de telão dos campeonatos liberados para a sua chave de parceiro.',
             'url' => 'https://fut.digital',
             'prefix' => 'fdk_',
         ],
@@ -68,9 +68,9 @@ class Credentials
     public static function test(string $provider, string $secret): string
     {
         if ($provider === 'futdigital') {
-            $list = Integrations::futdigitalApi($secret, 'competitions');
-            $n = count($list);
-            return $n === 1 ? '1 campeonato liberado' : "$n campeonatos liberados";
+            $me = (new FutDigitalClient($secret))->me();
+            $n = (int)($me['competitions'] ?? 0);
+            return trim(($me['name'] ?? '') . ' · ' . ($n === 1 ? '1 campeonato liberado' : "$n campeonatos liberados"), ' ·');
         }
         throw new RuntimeException('Serviço desconhecido.');
     }

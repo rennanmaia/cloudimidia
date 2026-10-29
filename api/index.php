@@ -110,6 +110,7 @@ try {
     $r->delete('orgs/{org}/credentials/{provider}', [CredentialController::class, 'destroy']);
     $r->post('orgs/{org}/credentials/{provider}/test', [CredentialController::class, 'test']);
     $r->get('orgs/{org}/futdigital/competitions', [CredentialController::class, 'futdigitalCompetitions']);
+    $r->get('orgs/{org}/futdigital/arenas', [CredentialController::class, 'futdigitalArenas']);
 
     // Relatórios
     $r->get('orgs/{org}/reports/plays', [ReportController::class, 'plays']);

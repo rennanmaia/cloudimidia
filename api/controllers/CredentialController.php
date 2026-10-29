@@ -64,7 +64,8 @@ class CredentialController
         if ($exists) DB::update('org_credentials', $data, 'id = ?', [$exists]);
         else DB::insert('org_credentials', $data + ['organization_id' => $ctx->id(), 'provider' => (string)$provider, 'created_at' => now()]);
         // Dados em cache das integrações desse serviço são refeitos com a nova chave
-        DB::exec('DELETE c FROM integration_cache c JOIN integrations i ON i.id = c.integration_id WHERE i.organization_id = ? AND i.type = ?', [$ctx->id(), $provider]);
+        DB::exec('DELETE c FROM integration_cache c JOIN integrations i ON i.id = c.integration_id WHERE i.organization_id = ? AND (i.type = ? OR i.type LIKE ?)', [$ctx->id(), $provider, $provider . '\_%']);
+        if ($provider === 'futdigital') FutDigitalClient::clearCache($ctx->id());
         log_activity($ctx->id(), 'credential.updated', "Chave do {$p['name']} " . ($exists ? 'trocada' : 'cadastrada'));
         respond(['ok' => true, 'message' => $summary]);
     }
@@ -103,8 +104,9 @@ class CredentialController
         $ctx = org_ctx($org);
         $secret = Credentials::get($ctx->id(), 'futdigital');
         if ($secret === null) respond(['configured' => false, 'competitions' => []]);
+        $status = query('status') === 'ongoing' ? 'ongoing' : null;
         try {
-            $list = Integrations::futdigitalApi($secret, 'competitions');
+            $list = FutDigitalClient::cached($ctx->id(), 'competitions:' . $status, fn() => (new FutDigitalClient($secret))->competitions($status));
         } catch (Throwable $e) {
             abort('Não foi possível consultar o FutDigital: ' . $e->getMessage(), 502);
         }
@@ -116,6 +118,27 @@ class CredentialController
             'city' => $c['city'] ?? null,
             'logo_url' => $c['logo_url'] ?? null,
             'league' => $c['league']['name'] ?? null,
+        ], $list)]);
+    }
+
+    /** Arenas com jogos dos campeonatos liberados (busca por nome). */
+    public static function futdigitalArenas($org): void
+    {
+        $ctx = org_ctx($org);
+        $secret = Credentials::get($ctx->id(), 'futdigital');
+        if ($secret === null) respond(['configured' => false, 'arenas' => []]);
+        $q = mb_substr(trim((string)query('q', '')), 0, 80);
+        try {
+            $list = FutDigitalClient::cached($ctx->id(), 'arenas:' . mb_strtolower($q), fn() => (new FutDigitalClient($secret))->arenas($q));
+        } catch (Throwable $e) {
+            abort('Não foi possível consultar o FutDigital: ' . $e->getMessage(), 502);
+        }
+        respond(['configured' => true, 'arenas' => array_map(fn($a) => [
+            'id' => (int)$a['id'],
+            'name' => $a['name'],
+            'city' => $a['city'] ?? null,
+            'image_url' => $a['image_url'] ?? null,
+            'matches' => $a['matches'] ?? null,
         ], $list)]);
     }
 }

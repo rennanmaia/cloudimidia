@@ -312,6 +312,7 @@ const ISSUE_LABELS = {
   timeout: { label: 'Não começou', color: 'amber' },
   empty: { label: 'Sem conteúdo', color: 'slate' },
   disabled: { label: 'Desativado', color: 'red' },
+  restart: { label: 'Player reiniciado', color: 'amber' },
 }
 
 /** Itens que a TV pulou nos últimos 7 dias (mídias com problema). */

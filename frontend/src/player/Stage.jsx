@@ -39,6 +39,26 @@ function itemDuration(item, integrations) {
 }
 
 /* ---------------- Itens ---------------- */
+/** Último quadro do vídeo como imagem (meia resolução, leve). null se não der. */
+function captureFrame(v) {
+  try {
+    if (!v.videoWidth || v.readyState < 2) return null
+    const c = document.createElement('canvas')
+    c.width = Math.round(v.videoWidth / 2)
+    c.height = Math.round(v.videoHeight / 2)
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height)
+    return c.toDataURL('image/jpeg', 0.8)
+  } catch {
+    return null // vídeo de outro endereço (sem permissão de leitura)
+  }
+}
+
+/** Fecha o vídeo de verdade: libera arquivo, buffers e decodificador. */
+function releaseVideo(v) {
+  if (!v) return
+  try { v.pause(); v.removeAttribute('src'); v.load() } catch { /* */ }
+}
+
 /*
  * Cada item avisa onReady quando já está desenhado; só então a camada aparece
  * (até lá continua a imagem anterior, sem tela preta). onEnd({ reason, detail }) = item pulado.
@@ -77,11 +97,19 @@ function VideoItem({ item, onEnd, onReady, shown, duration, muted, leaving, onSo
   const wantMuted = muted || !!item.settings?.muted
   const lastTime = useRef({ t: -1, at: Date.now() })
   const started = useRef(false)
+  const [still, setStill] = useState(null)
 
   useEffect(() => {
     const v = ref.current
     if (!v) return
-    if (leaving) { v.pause(); return }
+    if (leaving) {
+      v.pause()
+      // Guarda o último quadro numa imagem e libera o decodificador já, para o próximo vídeo
+      // não disputar memória com este (TV boxes de 1 GB travam com dois vídeos abertos)
+      const img = captureFrame(v)
+      if (img) { setStill(img); setTimeout(() => releaseVideo(v), 60) }
+      return
+    }
     v.muted = wantMuted
     const p = v.play()
     if (p?.catch) {
@@ -112,16 +140,21 @@ function VideoItem({ item, onEnd, onReady, shown, duration, muted, leaving, onSo
       const v = ref.current
       if (!v) return
       if (v.currentTime !== lastTime.current.t) lastTime.current = { t: v.currentTime, at: Date.now() }
-      else if (Date.now() - lastTime.current.at > (started.current ? 20000 : 15000)) {
+      else if (Date.now() - lastTime.current.at > (started.current ? 10000 : 15000)) {
         onEnd(started.current
           ? { reason: 'stalled', detail: `Parou em ${Math.round(v.currentTime)} s e não voltou a tocar` }
           : { reason: 'timeout', detail: 'O vídeo não começou a tocar em 15 s' })
       }
-    }, 5000)
+    }, 2500)
     return () => { clearTimeout(guard); clearInterval(watchdog) }
   }, [leaving, onEnd, item.media?.duration])
 
+  // Ao sair da tela, solta o arquivo e o decodificador na hora (sem esperar a limpeza de memória)
+  useEffect(() => () => releaseVideo(ref.current), [])
+
   return (
+    <>
+    {still && <img className={`cm-media cm-fit-${fit}`} src={still} alt="" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />}
     <video
       ref={ref}
       className={`cm-media cm-fit-${fit}`}
@@ -138,6 +171,7 @@ function VideoItem({ item, onEnd, onReady, shown, duration, muted, leaving, onSo
         setTimeout(() => onEnd({ reason: 'error', detail: MEDIA_ERRORS[code] || 'O vídeo não pôde ser aberto' }), 1000)
       }}
     />
+    </>
   )
 }
 
@@ -223,7 +257,7 @@ export function IdleScreen({ org, message = 'Aguardando programação' }) {
  * - onPlayed(log): chamado ao fim de cada item (comprovação de exibição)
  * - onNowPlaying(texto)
  */
-export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMedia, onNowPlaying, identify, preview }) {
+export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecover, cachedMedia, onNowPlaying, identify, preview }) {
   const integrations = manifest?.integrations || {}
   const muted = !!manifest?.screen?.muted
   const [program, setProgram] = useState(() => resolveProgram(manifest))
@@ -236,6 +270,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMe
   refs.current.program = program
   refs.current.onPlayed = onPlayed
   refs.current.onIssue = onIssue
+  refs.current.onRecover = onRecover
   refs.current.cached = cachedMedia
 
   // Reavalia a grade periodicamente e quando o manifesto muda
@@ -314,6 +349,12 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, cachedMe
       }
       const secs = prev.shownAt ? Math.round((Date.now() - prev.shownAt) / 1000) : 0
       if (prev.issue) st.onIssue?.({ ...ids, reason: prev.issue.reason, detail: prev.issue.detail || '', shown: secs, at: Date.now() })
+      // Vários vídeos seguidos falhando = aparelho sem memória: o player pede para reiniciar
+      if (prev.item.type === 'media' && prev.item.kind === 'video') {
+        if (prev.issue) st.videoFails = (st.videoFails || 0) + 1
+        else if (secs >= 3) st.videoFails = 0
+        if (st.videoFails >= 3) { st.videoFails = 0; st.onRecover?.() }
+      }
       // Só conta como exibição o que apareceu na tela
       if (st.onPlayed && secs >= 1) st.onPlayed({ ...ids, started_at: prev.shownAt, duration: secs })
     }

@@ -279,6 +279,15 @@ function Runtime({ token, onUnpaired }) {
   useEffect(() => {
     bridge.post({ type: 'status', paired: true, token, online, screenName: manifest?.screen?.name || null })
   }, [token, online, manifest?.screen?.name])
+  // Reinício do player quando vídeos seguidos falham (libera a memória do aparelho); no máximo a cada 15 min
+  const onRecover = useCallback(async () => {
+    const last = Number(store.get('cm_recover_at')) || 0
+    if (Date.now() - last < 15 * 60000) return
+    store.set('cm_recover_at', String(Date.now()))
+    issues.current.push({ media_id: null, integration_id: null, reason: 'restart', detail: '3 vídeos seguidos falharam: player reiniciado para liberar memória', at: Date.now() })
+    await Promise.race([heartbeat(), new Promise((r) => setTimeout(r, 5000))])
+    window.location.reload()
+  }, [heartbeat])
   const cachedMedia = useCachedMedia(view.media)
   // Espera (até 3 s) saber o que já está salvo antes de começar, para não tocar pela internet à toa
   const [cacheWait, setCacheWait] = useState(true)
@@ -308,7 +317,7 @@ function Runtime({ token, onUnpaired }) {
     <div style={S.full}>
       <div style={wrapStyle}>
         {manifest.screen?.is_active ? (
-          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
+          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} onRecover={onRecover} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
         ) : (
           <div className="cm-stage cm-off">
             {identify && <div className="cm-identify"><small>Esta TV é</small><b>{manifest.screen?.name}</b></div>}

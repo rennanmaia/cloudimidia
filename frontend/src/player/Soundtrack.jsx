@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { APP_BASE } from '../lib/api'
 
 /*
  * Trilha sonora da TV: toca em segundo plano enquanto as propagandas passam.
@@ -27,10 +28,6 @@ function loadScript(src, ready, timeout = 15000) {
   }
   return scripts[src]
 }
-const loadYouTube = () => (window.YT?.Player ? Promise.resolve(window.YT) : loadScript('https://www.youtube.com/iframe_api', (done) => {
-  const prev = window.onYouTubeIframeAPIReady
-  window.onYouTubeIframeAPIReady = () => { prev?.(); done(window.YT) }
-}))
 const loadSoundCloud = () => (window.SC?.Widget ? Promise.resolve(window.SC) : loadScript('https://w.soundcloud.com/player/api.js', (done) => {
   const check = setInterval(() => { if (window.SC?.Widget) { clearInterval(check); done(window.SC) } }, 200)
 }))
@@ -63,86 +60,50 @@ const YT_ERRORS = {
   153: 'o YouTube recusou o player',
 }
 
+/*
+ * O player do YouTube roda numa página do próprio sistema (public/yt-relay.html), não aqui:
+ * o YouTube recusa tocar quando a página em volta é um IP, como o servidor local do app (127.0.0.1).
+ */
+function relayUrl(cfg, paused) {
+  const s = cfg.source
+  const q = new URLSearchParams({ vol: String(cfg.volume), shuffle: cfg.shuffle ? '1' : '0', paused: paused ? '1' : '0' })
+  if (s.list_id) q.set('list', s.list_id)
+  else q.set('v', s.video_id)
+  return `${APP_BASE}public/yt-relay.html?${q}`
+}
+
 function YouTubeTrack({ cfg, paused, onFail, onPlaying, onTitle }) {
-  const host = useRef(null)
-  const player = useRef(null)
-  const pausedRef = useRef(paused)
-  pausedRef.current = paused
+  const frame = useRef(null)
+  const state = useRef(null)
+  const [src] = useState(() => relayUrl(cfg, paused))
+  const send = (cmd, value) => { try { frame.current?.contentWindow?.postMessage({ type: 'cm-yt', cmd, value }, '*') } catch { /* */ } }
 
   useEffect(() => {
-    let dead = false
-    let errors = 0
-    const s = cfg.source
-    loadYouTube().then((YT) => {
-      if (dead || !host.current) return
-      const el = document.createElement('div')
-      host.current.appendChild(el)
-      // Sem autoplay do próprio YouTube: quem manda tocar ou pausar é a TV
-      const vars = { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0, iv_load_policy: 3, playsinline: 1, origin: window.location.origin }
-      if (s.list_id) Object.assign(vars, { listType: 'playlist', list: s.list_id })
-      else Object.assign(vars, { loop: 1, playlist: s.video_id })
-      player.current = new YT.Player(el, {
-        width: '100%',
-        height: '100%',
-        ...(s.list_id ? {} : { videoId: s.video_id }),
-        playerVars: vars,
-        events: {
-          onReady: (e) => {
-            const p = e.target
-            p.setVolume(cfg.volume)
-            if (s.list_id) {
-              p.setLoop(true)
-              if (cfg.shuffle) { p.setShuffle(true); p.playVideoAt(0) }
-            }
-            if (!pausedRef.current) p.playVideo()
-          },
-          onStateChange: (e) => {
-            if (e.data === YT.PlayerState.PLAYING) {
-              // Começou sozinho (ex.: próximo vídeo da lista) durante uma propaganda com som
-              if (pausedRef.current) { e.target.pauseVideo(); return }
-              errors = 0
-              onPlaying()
-              onTitle(e.target.getVideoData?.()?.title || '')
-            }
-            if (e.data === YT.PlayerState.ENDED && !s.list_id) { e.target.seekTo(0); e.target.playVideo() }
-          },
-          onError: (e) => {
-            errors++
-            // Numa playlist, pula o vídeo com problema; desiste se vários seguidos falharem
-            if (s.list_id && errors < 5) e.target.nextVideo()
-            // Vídeo único com falha de reprodução: recarrega uma vez antes de desistir
-            else if (!s.list_id && errors === 1 && e.data === 5) e.target.loadVideoById(s.video_id)
-            else onFail(`YouTube: ${YT_ERRORS[e.data] || `erro ${e.data}`}`)
-          },
-        },
-      })
-    }).catch((e) => !dead && onFail(`YouTube: ${e.message}`))
-    return () => {
-      dead = true
-      try { player.current?.destroy() } catch { /* */ }
-      player.current = null
-      if (host.current) host.current.innerHTML = ''
+    const onMessage = (e) => {
+      const m = e.data
+      if (!m || m.type !== 'cm-yt' || e.source !== frame.current?.contentWindow) return
+      if (m.event === 'state') {
+        state.current = m.state
+        if (m.state === 1) { onPlaying(); onTitle(m.title || '') }
+      } else if (m.event === 'error') {
+        onFail(`YouTube: ${m.code === 'load' ? 'sem conexão' : YT_ERRORS[m.code] || `erro ${m.code}`}`)
+      }
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [onFail, onPlaying, onTitle])
 
-  useEffect(() => {
-    const p = player.current
-    if (!p?.getPlayerState) return
-    try { paused ? p.pauseVideo() : p.playVideo() } catch { /* */ }
-  }, [paused])
-  useEffect(() => { try { player.current?.setVolume?.(cfg.volume) } catch { /* */ } }, [cfg.volume])
+  useEffect(() => { send(paused ? 'pause' : 'play') }, [paused])
+  useEffect(() => { send('volume', cfg.volume) }, [cfg.volume])
 
   useWatchdog(
-    () => { try { const st = player.current?.getPlayerState?.(); return st === 1 || st === 3 } catch { return false } },
-    () => { try { player.current?.playVideo() } catch { /* */ } },
-    (why) => {
-      const st = player.current?.getPlayerState?.()
-      onFail(st === -1 || st === 5 ? 'YouTube: o aparelho bloqueou o som automático (use o app CloudiMídia Player)' : why)
-    },
+    () => state.current === 1 || state.current === 3,
+    () => send('play'),
+    (why) => onFail(state.current === -1 || state.current === 5 ? 'YouTube: o vídeo não começou a tocar' : state.current == null ? 'YouTube: o player não carregou' : why),
     !paused,
     'YouTube',
   )
-  return <div ref={host} className="cm-st-host" />
+  return <iframe ref={frame} src={src} title="" allow="autoplay; encrypted-media" className="cm-st-frame" tabIndex={-1} />
 }
 
 /* ---------- SoundCloud ---------- */

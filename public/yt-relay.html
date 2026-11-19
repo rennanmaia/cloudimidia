@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<title>Trilha sonora</title>
+<style>html, body, #p { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+/*
+ * Player do YouTube da trilha sonora, servido do domínio do sistema.
+ * O YouTube recusa tocar quando a página em volta é um endereço IP (como o servidor local do app da TV),
+ * então a TV abre esta página e conversa com ela por postMessage:
+ *   TV -> aqui:  { type: 'cm-yt', cmd: 'play' | 'pause' | 'volume', value }
+ *   aqui -> TV:  { type: 'cm-yt', event: 'ready' | 'state' | 'error', state, title, code }
+ */
+(function () {
+  var q = new URLSearchParams(location.search)
+  var video = q.get('v') || ''
+  var list = q.get('list') || ''
+  var shuffle = q.get('shuffle') === '1'
+  var volume = Math.max(0, Math.min(100, Number(q.get('vol')) || 60))
+  var wantPlay = q.get('paused') !== '1'
+  var muted = q.get('mute') === '1'
+  var player = null
+  var errors = 0
+  var parentWin = window.parent
+
+  function send(msg) { msg.type = 'cm-yt'; try { parentWin.postMessage(msg, '*') } catch (e) { /* */ } }
+
+  window.addEventListener('message', function (e) {
+    if (e.source !== parentWin || !e.data || e.data.type !== 'cm-yt') return
+    var m = e.data
+    if (m.cmd === 'play') { wantPlay = true; try { player && player.playVideo() } catch (x) { /* */ } }
+    if (m.cmd === 'pause') { wantPlay = false; try { player && player.pauseVideo() } catch (x) { /* */ } }
+    if (m.cmd === 'volume') { volume = Number(m.value) || 0; try { player && player.setVolume(volume) } catch (x) { /* */ } }
+  })
+
+  window.onYouTubeIframeAPIReady = function () {
+    var vars = { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0, iv_load_policy: 3, playsinline: 1, origin: location.origin }
+    if (list) { vars.listType = 'playlist'; vars.list = list } else { vars.loop = 1; vars.playlist = video }
+    var opts = {
+      width: '100%',
+      height: '100%',
+      playerVars: vars,
+      events: {
+        onReady: function (e) {
+          var p = e.target
+          p.setVolume(volume)
+          if (muted) p.mute()
+          if (list) { p.setLoop(true); if (shuffle) { p.setShuffle(true); p.playVideoAt(0) } }
+          if (wantPlay) p.playVideo()
+          send({ event: 'ready' })
+        },
+        onStateChange: function (e) {
+          // Começou sozinho (próximo da lista) enquanto a TV pediu pausa
+          if (e.data === 1 && !wantPlay) { e.target.pauseVideo(); return }
+          if (e.data === 1) errors = 0
+          if (e.data === 0 && !list) { e.target.seekTo(0); e.target.playVideo() }
+          var d = e.target.getVideoData ? e.target.getVideoData() : null
+          send({ event: 'state', state: e.data, title: (d && d.title) || '' })
+        },
+        onError: function (e) {
+          errors++
+          if (list && errors < 5) { e.target.nextVideo(); return }
+          if (!list && errors === 1 && e.data === 5) { e.target.loadVideoById(video); return }
+          send({ event: 'error', code: e.data })
+        },
+      },
+    }
+    if (!list) opts.videoId = video
+    player = new YT.Player('p', opts)
+  }
+
+  var s = document.createElement('script')
+  s.src = 'https://www.youtube.com/iframe_api'
+  s.onerror = function () { send({ event: 'error', code: 'load' }) }
+  document.head.appendChild(s)
+})()
+</script>
+</body>
+</html>

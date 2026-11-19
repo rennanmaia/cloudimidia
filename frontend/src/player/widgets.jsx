@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { APP_BASE } from '../lib/api'
 import {
   Sun, Moon, CloudSun, CloudMoon, Cloud, CloudFog, CloudDrizzle, CloudRain, CloudSnow, CloudLightning, MapPin, Droplets, Wind, Thermometer,
 } from 'lucide-react'
@@ -306,11 +307,12 @@ export function WebpageWidget({ integration }) {
 /* ---------- YouTube ---------- */
 export function YoutubeWidget({ integration, muted }) {
   const c = integration.config || {}
+  // Pela página do sistema (yt-relay): o YouTube recusa tocar dentro do servidor local do app (127.0.0.1)
   const src = useMemo(() => {
-    const mute = c.muted || muted ? 1 : 0
-    const common = `autoplay=1&mute=${mute}&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`
-    if (c.video_id) return `https://www.youtube.com/embed/${c.video_id}?${common}&loop=1&playlist=${c.video_id}${c.list_id ? `&list=${c.list_id}` : ''}`
-    return `https://www.youtube.com/embed/videoseries?list=${c.list_id}&${common}&loop=1`
+    const q = new URLSearchParams({ vol: '100', mute: c.muted || muted ? '1' : '0' })
+    if (c.list_id) q.set('list', c.list_id)
+    else q.set('v', c.video_id)
+    return `${APP_BASE}public/yt-relay.html?${q}`
   }, [c.video_id, c.list_id, c.muted, muted])
   return <iframe className="cm-frame" style={{ background: '#000' }} src={src} title={integration.name} allow="autoplay; encrypted-media; fullscreen" />
 }

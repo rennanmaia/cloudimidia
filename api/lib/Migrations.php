@@ -8,7 +8,7 @@ declare(strict_types=1);
  */
 class Migrations
 {
-    public const VERSION = 7;
+    public const VERSION = 8;
 
     public const PLAY_ISSUES_SQL = 'CREATE TABLE IF NOT EXISTS play_issues (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -93,6 +93,13 @@ class Migrations
         // v7: trilha sonora da TV
         if (!self::columnExists('screens', 'soundtrack')) {
             DB::pdo()->exec('ALTER TABLE screens ADD COLUMN soundtrack TEXT NULL AFTER rotation');
+        }
+
+        // v8: controle remoto da trilha pelo celular (situação da trilha e sessão do controle aberto)
+        if (!self::columnExists('screens', 'soundtrack_state')) {
+            DB::pdo()->exec('ALTER TABLE screens
+                ADD COLUMN soundtrack_state TEXT NULL AFTER soundtrack,
+                ADD COLUMN remote_until DATETIME NULL AFTER soundtrack_state');
         }
 
         if (!is_dir(STORAGE_DIR)) {

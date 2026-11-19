@@ -10,6 +10,7 @@ import Invite from './pages/Invite'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const ScreensPage = lazy(() => import('./pages/screens/ScreensPage'))
 const ScreenDetail = lazy(() => import('./pages/screens/ScreenDetail'))
+const RemoteControl = lazy(() => import('./pages/screens/RemoteControl'))
 const PairScreen = lazy(() => import('./pages/screens/PairScreen'))
 const PlaylistsPage = lazy(() => import('./pages/playlists/PlaylistsPage'))
 const PlaylistEditor = lazy(() => import('./pages/playlists/PlaylistEditor'))
@@ -76,6 +77,7 @@ export default function App() {
                 <Route path="tvs" element={<ScreensPage />} />
                 <Route path="tvs/adicionar" element={<PairScreen />} />
                 <Route path="tvs/:id" element={<ScreenDetail />} />
+                <Route path="tvs/:id/controle" element={<RemoteControl />} />
                 <Route path="playlists" element={<PlaylistsPage />} />
                 <Route path="playlists/:id" element={<PlaylistEditor />} />
                 <Route path="midias" element={<MediaPage />} />

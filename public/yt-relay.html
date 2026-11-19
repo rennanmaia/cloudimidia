@@ -37,6 +37,12 @@
     var m = e.data
     if (m.cmd === 'play') { wantPlay = true; try { player && player.playVideo() } catch (x) { /* */ } }
     if (m.cmd === 'pause') { wantPlay = false; try { player && player.pauseVideo() } catch (x) { /* */ } }
+    if (m.cmd === 'next' || m.cmd === 'prev') {
+      wantPlay = true
+      try {
+        if (list) { m.cmd === 'next' ? player.nextVideo() : player.previousVideo() } else { player.seekTo(0); player.playVideo() }
+      } catch (x) { /* */ }
+    }
     if (m.cmd === 'volume') { volume = Number(m.value) || 0; try { player && player.setVolume(volume) } catch (x) { /* */ } }
   })
 

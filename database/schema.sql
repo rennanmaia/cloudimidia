@@ -158,6 +158,8 @@ CREATE TABLE IF NOT EXISTS screens (
   muted TINYINT(1) NOT NULL DEFAULT 0,
   rotation SMALLINT NOT NULL DEFAULT 0,
   soundtrack TEXT NULL,
+  soundtrack_state TEXT NULL,
+  remote_until DATETIME NULL,
   default_playlist_id INT UNSIGNED NULL,
   device_token_hash CHAR(64) NULL,
   install_token_hash CHAR(64) NULL,

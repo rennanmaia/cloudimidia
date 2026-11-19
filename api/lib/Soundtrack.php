@@ -11,6 +11,25 @@ class Soundtrack
     public const PROVIDERS = ['youtube', 'soundcloud', 'spotify', 'deezer', 'stream'];
     public const VIDEO_MODES = ['off', 'small', 'medium'];
     public const CORNERS = ['br', 'bl', 'tr', 'tl'];
+    public const AD_AUDIO = ['mute_ads', 'pause_music', 'both'];
+    /** Comandos do controle remoto (celular) */
+    public const REMOTE_COMMANDS = ['play', 'pause', 'stop', 'next', 'prev', 'volume'];
+
+    /** Situação da trilha enviada pela TV (lista fechada de campos). */
+    public static function cleanState($in): ?array
+    {
+        if (!is_array($in)) return null;
+        $states = ['playing', 'paused', 'stopped', 'ad', 'loading', 'offline', 'error', 'muted'];
+        return [
+            'state' => in_array($in['state'] ?? '', $states, true) ? $in['state'] : 'loading',
+            'title' => is_string($in['title'] ?? null) ? mb_substr($in['title'], 0, 200) : '',
+            'can_skip' => (bool)($in['can_skip'] ?? false),
+            'can_pause' => (bool)($in['can_pause'] ?? true),
+            'volume' => isset($in['volume']) && is_numeric($in['volume']) ? max(0, min(100, (int)$in['volume'])) : null,
+            'detail' => is_string($in['detail'] ?? null) ? mb_substr($in['detail'], 0, 200) : '',
+            'at' => gmdate('c'),
+        ];
+    }
 
     /** Identifica a plataforma pelo link. Lança 422 com uma mensagem clara se não reconhecer. */
     public static function parse(string $url): array
@@ -80,12 +99,17 @@ class Soundtrack
         $bool = fn($k, $def) => isset($in[$k]) ? filter_var($in[$k], FILTER_VALIDATE_BOOLEAN) : $def;
         $source = self::parse($url);
         $hasVideo = $source['provider'] === 'youtube';
+        // Propaganda com som: tira o som da propaganda (padrão), pausa a música ou toca os dois
+        $adAudio = $in['ad_audio'] ?? null;
+        if (!in_array($adAudio, self::AD_AUDIO, true)) {
+            $adAudio = isset($in['pause_on_ad_sound']) && !filter_var($in['pause_on_ad_sound'], FILTER_VALIDATE_BOOLEAN) ? 'both' : 'mute_ads';
+        }
         return [
             'url' => $url,
             'source' => $source,
             'volume' => $int('volume', 0, 100, 60),
             'shuffle' => $bool('shuffle', true),
-            'pause_on_ad_sound' => $bool('pause_on_ad_sound', true),
+            'ad_audio' => $adAudio,
             // Miniatura do vídeo de tempos em tempos (só fontes com vídeo)
             'video_mode' => $hasVideo && in_array($in['video_mode'] ?? '', self::VIDEO_MODES, true) ? $in['video_mode'] : 'off',
             'video_every' => $int('video_every', 1, 60, 5),

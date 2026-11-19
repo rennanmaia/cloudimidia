@@ -5,7 +5,7 @@ import {
   useIntegrationData, loadIntegrationData,
 } from './widgets'
 import Footer from './Footer'
-import Soundtrack from './Soundtrack'
+import Soundtrack, { adAudioMode } from './Soundtrack'
 import FutDigitalWidget from './FutDigitalWidget'
 import FutDigitalSlotItem, { SlotPrewarm, slotBlocked } from './FutDigitalSlotItem'
 import './player.css'
@@ -258,7 +258,7 @@ export function IdleScreen({ org, message = 'Aguardando programação' }) {
  * - onPlayed(log): chamado ao fim de cada item (comprovação de exibição)
  * - onNowPlaying(texto)
  */
-export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecover, cachedMedia, onNowPlaying, identify, preview, online = true }) {
+export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecover, cachedMedia, onNowPlaying, identify, preview, online = true, onSoundtrackStatus }) {
   const integrations = manifest?.integrations || {}
   const muted = !!manifest?.screen?.muted
   const [program, setProgram] = useState(() => resolveProgram(manifest))
@@ -423,6 +423,8 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
   const tickerPlaylist = basePlaylist || current?.playlist
   const musicInteg = tickerPlaylist?.music_integration_id ? integrations[tickerPlaylist.music_integration_id] : null
   const soundtrack = !preview && manifest?.screen?.soundtrack?.source ? manifest.screen.soundtrack : null
+  // Trilha configurada para "tirar o som da propaganda": vídeos e YouTube da programação sem som
+  const muteAds = adAudioMode(soundtrack) === 'mute_ads'
 
   return (
     <div className="cm-stage">
@@ -436,11 +438,11 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
           const common = { item, onEnd: end, onReady: ready, shown }
           let content = null
           if (item.type === 'media' && item.kind === 'image') content = <ImageItem {...common} duration={duration} />
-          else if (item.type === 'media' && item.kind === 'video') content = <VideoItem {...common} duration={item.duration} muted={muted} leaving={leaving} onSound={setVideoSound} />
+          else if (item.type === 'media' && item.kind === 'video') content = <VideoItem {...common} duration={item.duration} muted={muted || muteAds} leaving={leaving} onSound={setVideoSound} />
           else if (item.type === 'integration' && integrations[item.integration_id]?.type === 'futdigital_slot') {
             content = <FutDigitalSlotItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} preview={preview} />
           } else if (item.type === 'integration' && integrations[item.integration_id]) {
-            content = <WidgetItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} duration={duration} timezone={manifest?.organization?.timezone} muted={muted} />
+            content = <WidgetItem {...common} integration={integrations[item.integration_id]} fetchData={fetchData} duration={duration} timezone={manifest?.organization?.timezone} muted={muted || muteAds} />
           }
           return (
             <div
@@ -452,7 +454,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
             </div>
           )
         })}
-        {soundtrack && <Soundtrack config={soundtrack} muted={muted} adSound={videoSound} online={online} onIssue={onIssue} />}
+        {soundtrack && <Soundtrack config={soundtrack} muted={muted} adSound={videoSound} online={online} onIssue={onIssue} onStatus={onSoundtrackStatus} />}
         {identify && (
           <div className="cm-identify">
             <small>Esta TV é</small>

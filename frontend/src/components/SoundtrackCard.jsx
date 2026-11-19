@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Music2, Save, Youtube, Radio, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, Music2, Save, Youtube, Radio, CheckCircle2, Gamepad2 } from 'lucide-react'
+import { adAudioMode } from '../player/Soundtrack'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useFetch } from '../lib/hooks'
 import { useToast } from './feedback'
 import { Badge, Button, Card, CardTitle, Field, Input, Segmented, Select, Toggle, cn } from './ui'
 
-const DEFAULTS = { enabled: false, url: '', volume: 60, shuffle: true, pause_on_ad_sound: true, video_mode: 'off', video_every: 5, video_for: 20, corner: 'br' }
+const DEFAULTS = { enabled: false, url: '', volume: 60, shuffle: true, ad_audio: 'mute_ads', video_mode: 'off', video_every: 5, video_for: 20, corner: 'br' }
+
+const AD_AUDIO_HINTS = {
+  mute_ads: 'As propagandas passam sem som e a música não para.',
+  pause_music: 'A música pausa no vídeo com som e volta sozinha quando ele termina.',
+  both: 'A música e o som da propaganda tocam juntos.',
+}
 
 /** Reconhece a plataforma pelo link (o servidor confere de novo ao salvar). */
 export function detectSource(url) {
@@ -31,7 +38,11 @@ export default function SoundtrackCard({ screen, onSaved }) {
   const toast = useToast()
   // A página recarrega a TV a cada 10 s: só volta o formulário se a trilha salva mudar de fato
   const savedKey = JSON.stringify(screen.soundtrack || null)
-  const initial = useMemo(() => (screen.soundtrack ? { ...DEFAULTS, ...screen.soundtrack, enabled: true } : DEFAULTS), [savedKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const initial = useMemo(() => {
+    if (!screen.soundtrack) return DEFAULTS
+    const { pause_on_ad_sound: _old, ...saved } = screen.soundtrack
+    return { ...DEFAULTS, ...saved, ad_audio: adAudioMode(screen.soundtrack), enabled: true }
+  }, [savedKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState(initial)
   const [others, setOthers] = useState([])
   const [saving, setSaving] = useState(false)
@@ -65,7 +76,7 @@ export default function SoundtrackCard({ screen, onSaved }) {
   const Icon = ICONS[src?.provider] || Music2
   return (
     <Card>
-      <CardTitle icon={Music2}>Trilha sonora</CardTitle>
+      <CardTitle icon={Music2} action={screen.soundtrack && <Button size="sm" variant="subtle" icon={Gamepad2} to={`/tvs/${screen.id}/controle`}>Controle remoto</Button>}>Trilha sonora</CardTitle>
       <p className="-mt-2 mb-4 text-sm text-slate-500">Música de fundo tocando no estabelecimento enquanto as propagandas passam. Sem internet, a TV continua só com as propagandas.</p>
       <form onSubmit={save} className="space-y-4">
         <Toggle label="Tocar trilha sonora nesta TV" checked={form.enabled} onChange={(v) => set({ enabled: v })} />
@@ -91,8 +102,15 @@ export default function SoundtrackCard({ screen, onSaved }) {
             </Field>
             <div className="space-y-3">
               {['youtube', 'soundcloud'].includes(src?.provider) && <Toggle label="Ordem aleatória" checked={form.shuffle} onChange={(v) => set({ shuffle: v })} />}
-              <Toggle label="Pausar quando a propaganda tiver som" description="A música volta sozinha quando o vídeo com som termina." checked={form.pause_on_ad_sound} onChange={(v) => set({ pause_on_ad_sound: v })} />
             </div>
+            <Field label="Quando a propaganda tiver som" hint={AD_AUDIO_HINTS[form.ad_audio]}>
+              <Segmented
+                className="w-full"
+                value={form.ad_audio}
+                onChange={(v) => set({ ad_audio: v })}
+                options={[{ value: 'mute_ads', label: 'Só a música' }, { value: 'pause_music', label: 'Pausar a música' }, { value: 'both', label: 'Os dois' }]}
+              />
+            </Field>
 
             {src?.video && (
               <div className="space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">

@@ -127,6 +127,8 @@ class PlayerController
         if ($info) $data['device_info'] = $info;
         $native = self::nativeDiagnostics();
         if ($native) $data['diagnostics'] = $native;
+        $st = Soundtrack::cleanState(input('soundtrack_state'));
+        if ($st) $data['soundtrack_state'] = json_encode($st, JSON_UNESCAPED_UNICODE);
         DB::update('screens', $data, 'id = ?', [$sid]);
 
         // Registro de exibições (comprovação para anunciantes)
@@ -176,10 +178,40 @@ class PlayerController
         $manifest = Manifest::forScreen(DB::one('SELECT * FROM screens WHERE id = ?', [$sid]));
         respond([
             'version' => $manifest['version'],
-            'commands' => array_map(fn($c) => ['id' => (int)$c['id'], 'command' => $c['command']], $commands),
+            'commands' => self::formatCommands($commands),
             'screen_name' => $screen['name'],
             'server_time' => gmdate('c'),
+            'remote' => self::remoteOpen($screen),
         ]);
+    }
+
+    private static function formatCommands(array $commands): array
+    {
+        return array_map(fn($c) => ['id' => (int)$c['id'], 'command' => $c['command'], 'value' => decode_json($c['payload'] ?? null, [])['value'] ?? null], $commands);
+    }
+
+    private static function remoteOpen(array $screen): bool
+    {
+        return !empty($screen['remote_until']) && strtotime($screen['remote_until'] . ' UTC') > time();
+    }
+
+    /**
+     * Consulta rápida enquanto o controle remoto está aberto no celular:
+     * guarda a situação da trilha e entrega os comandos pendentes.
+     */
+    public static function remote(): void
+    {
+        $screen = self::screen();
+        $sid = (int)$screen['id'];
+        $data = ['last_seen_at' => now()];
+        $st = Soundtrack::cleanState(input('soundtrack_state'));
+        if ($st) $data['soundtrack_state'] = json_encode($st, JSON_UNESCAPED_UNICODE);
+        DB::update('screens', $data, 'id = ?', [$sid]);
+        $commands = DB::all('SELECT id, command, payload FROM screen_commands WHERE screen_id = ? AND delivered_at IS NULL ORDER BY id', [$sid]);
+        if ($commands) {
+            DB::exec('UPDATE screen_commands SET delivered_at = ? WHERE id IN (' . DB::in(array_column($commands, 'id')) . ')', array_merge([now()], array_column($commands, 'id')));
+        }
+        respond(['commands' => self::formatCommands($commands), 'remote' => self::remoteOpen($screen)]);
     }
 
     /** Estatísticas enviadas pelo app da TV (lista fechada de campos, tamanho limitado). */

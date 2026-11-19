@@ -214,6 +214,8 @@ function Runtime({ token, onUnpaired }) {
   const [identify, setIdentify] = useState(false)
   const logs = useRef([])
   const issues = useRef([])
+  const soundtrackState = useRef(null)
+  const [remote, setRemote] = useState(false)
   const nowPlaying = useRef('')
   const versionRef = useRef(manifest?.version)
   const startedAt = useRef(Date.now())
@@ -231,24 +233,31 @@ function Runtime({ token, onUnpaired }) {
     }
   }, [token, onUnpaired])
 
+  const runCommands = useCallback(async (commands) => {
+    for (const c of commands || []) {
+      // Controle remoto da trilha sonora (celular)
+      if (c.command.startsWith('st_')) { window.dispatchEvent(new CustomEvent('cm-soundtrack', { detail: { cmd: c.command.slice(3), value: c.value } })); continue }
+      if (NATIVE_COMMANDS.includes(c.command)) bridge.post({ type: 'command', command: c.command })
+      if (c.command === 'reload') setTimeout(() => window.location.reload(), 500)
+      if (c.command === 'identify') { setIdentify(true); setTimeout(() => setIdentify(false), 12000) }
+      if (c.command === 'refresh') fetchManifest()
+      if (c.command === 'clear_cache') {
+        try { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))) } catch { /* */ }
+        store.set(LS.manifest, null)
+        setTimeout(() => window.location.reload(), 500)
+      }
+    }
+  }, [fetchManifest])
+
   const heartbeat = useCallback(async () => {
     const sending = logs.current.splice(0, 200)
     const sendingIssues = issues.current.splice(0, 50)
     try {
-      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, issues: sendingIssues, info: deviceInfo(), native: bridge.diag } })
+      const r = await call('player/heartbeat', { method: 'POST', token, body: { now_playing: nowPlaying.current, logs: sending, issues: sendingIssues, info: deviceInfo(), native: bridge.diag, soundtrack_state: soundtrackState.current } })
       setOnline(true)
+      setRemote(!!r.remote)
       if (r.version !== versionRef.current) fetchManifest()
-      for (const c of r.commands || []) {
-        if (NATIVE_COMMANDS.includes(c.command)) bridge.post({ type: 'command', command: c.command })
-        if (c.command === 'reload') setTimeout(() => window.location.reload(), 500)
-        if (c.command === 'identify') { setIdentify(true); setTimeout(() => setIdentify(false), 12000) }
-        if (c.command === 'refresh') fetchManifest()
-        if (c.command === 'clear_cache') {
-          try { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))) } catch { /* */ }
-          store.set(LS.manifest, null)
-          setTimeout(() => window.location.reload(), 500)
-        }
-      }
+      await runCommands(r.commands)
     } catch (e) {
       logs.current.unshift(...sending)
       if (logs.current.length > 2000) logs.current.length = 2000
@@ -257,7 +266,25 @@ function Runtime({ token, onUnpaired }) {
       if (e.status === 401) onUnpaired()
       else setOnline(false)
     }
-  }, [token, fetchManifest, onUnpaired])
+  }, [token, fetchManifest, onUnpaired, runCommands])
+
+  // Controle remoto aberto no celular: consulta rápida (2,5 s) só enquanto ele estiver aberto
+  useEffect(() => {
+    if (!remote) return
+    let stop = false
+    let timer
+    const poll = async () => {
+      try {
+        const r = await call('player/remote', { method: 'POST', token, body: { soundtrack_state: soundtrackState.current } })
+        if (!r.remote) setRemote(false)
+        await runCommands(r.commands)
+      } catch { /* o heartbeat cuida da conexão */ }
+      if (!stop) timer = setTimeout(poll, 2500)
+    }
+    poll()
+    return () => { stop = true; clearTimeout(timer) }
+  }, [remote, token, runCommands])
+  const onSoundtrackStatus = useCallback((s) => { soundtrackState.current = s }, [])
 
   useEffect(() => {
     fetchManifest()
@@ -317,7 +344,7 @@ function Runtime({ token, onUnpaired }) {
     <div style={S.full}>
       <div style={wrapStyle}>
         {manifest.screen?.is_active ? (
-          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} onRecover={onRecover} online={online} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
+          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} onRecover={onRecover} online={online} onSoundtrackStatus={onSoundtrackStatus} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
         ) : (
           <div className="cm-stage cm-off">
             {identify && <div className="cm-identify"><small>Esta TV é</small><b>{manifest.screen?.name}</b></div>}

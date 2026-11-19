@@ -74,6 +74,8 @@ try {
     $r->put('orgs/{org}/screens/{id}', [ScreenController::class, 'update']);
     $r->delete('orgs/{org}/screens/{id}', [ScreenController::class, 'destroy']);
     $r->post('orgs/{org}/screens/{id}/command', [ScreenController::class, 'command']);
+    $r->get('orgs/{org}/screens/{id}/remote', [RemoteController::class, 'status']);
+    $r->post('orgs/{org}/screens/{id}/remote', [RemoteController::class, 'send']);
     $r->get('orgs/{org}/screens/{id}/manifest', [ScreenController::class, 'manifest']);
 
     // Mídias
@@ -126,6 +128,7 @@ try {
     $r->get('player/app/download', [PlayerController::class, 'appDownload']);
     $r->get('player/manifest', [PlayerController::class, 'manifest']);
     $r->post('player/heartbeat', [PlayerController::class, 'heartbeat']);
+    $r->post('player/remote', [PlayerController::class, 'remote']);
     $r->get('player/integrations/{id}', [PlayerController::class, 'integration']);
 
     // Administração da plataforma

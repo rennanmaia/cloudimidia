@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { APP_BASE } from '../lib/api'
 
 /*
@@ -72,7 +72,12 @@ function relayUrl(cfg, paused) {
   return `${APP_BASE}public/yt-relay.html?${q}`
 }
 
-function YouTubeTrack({ cfg, paused, onFail, onPlaying, onTitle }) {
+/** Próxima/anterior pedida pelo controle remoto: { cmd: 'next' | 'prev', n } (n muda a cada pedido). */
+function useSkip(control, fn) {
+  useEffect(() => { if (control?.n) fn(control.cmd) }, [control?.n]) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+function YouTubeTrack({ cfg, paused, onFail, onPlaying, onTitle, control }) {
   const frame = useRef(null)
   const state = useRef(null)
   const [src] = useState(() => relayUrl(cfg, paused))
@@ -95,6 +100,7 @@ function YouTubeTrack({ cfg, paused, onFail, onPlaying, onTitle }) {
 
   useEffect(() => { send(paused ? 'pause' : 'play') }, [paused])
   useEffect(() => { send('volume', cfg.volume) }, [cfg.volume])
+  useSkip(control, (cmd) => send(cmd))
 
   useWatchdog(
     () => state.current === 1 || state.current === 3,
@@ -107,7 +113,7 @@ function YouTubeTrack({ cfg, paused, onFail, onPlaying, onTitle }) {
 }
 
 /* ---------- SoundCloud ---------- */
-function SoundCloudTrack({ cfg, paused, onFail, onPlaying }) {
+function SoundCloudTrack({ cfg, paused, onFail, onPlaying, onTitle, control }) {
   const frame = useRef(null)
   const widget = useRef(null)
   const playing = useRef(false)
@@ -129,7 +135,11 @@ function SoundCloudTrack({ cfg, paused, onFail, onPlaying }) {
           if (!pausedRef.current) w.play()
         })
       })
-      w.bind(E.PLAY, () => { playing.current = true; onPlaying() })
+      w.bind(E.PLAY, () => {
+        playing.current = true
+        onPlaying()
+        w.getCurrentSound((s) => onTitle(s?.title || ''))
+      })
       w.bind(E.PAUSE, () => { playing.current = false })
       w.bind(E.FINISH, () => {
         playing.current = false
@@ -145,6 +155,7 @@ function SoundCloudTrack({ cfg, paused, onFail, onPlaying }) {
 
   useEffect(() => { try { paused ? widget.current?.pause() : widget.current?.play() } catch { /* */ } }, [paused])
   useEffect(() => { try { widget.current?.setVolume(cfg.volume) } catch { /* */ } }, [cfg.volume])
+  useSkip(control, (cmd) => { try { cmd === 'next' ? widget.current?.next() : widget.current?.prev() } catch { /* */ } })
   useWatchdog(() => playing.current, () => { try { widget.current?.play() } catch { /* */ } }, onFail, !paused, 'SoundCloud')
   return <iframe ref={frame} src={src} title="" allow="autoplay" className="cm-st-hidden" tabIndex={-1} />
 }
@@ -224,14 +235,34 @@ function StreamTrack({ cfg, paused, onFail, onPlaying }) {
 
 const PROVIDERS = { youtube: YouTubeTrack, soundcloud: SoundCloudTrack, spotify: SpotifyTrack, deezer: DeezerTrack, stream: StreamTrack }
 
-export default function Soundtrack({ config, muted, adSound, online, onIssue }) {
+/**
+ * O que fazer quando a propaganda tem som: 'mute_ads' (tira o som da propaganda), 'pause_music' ou 'both'.
+ * Configurações antigas (pause_on_ad_sound) continuam como eram.
+ */
+export function adAudioMode(cfg) {
+  if (!cfg) return 'both'
+  if (cfg.ad_audio) return cfg.ad_audio
+  return cfg.pause_on_ad_sound === false ? 'both' : 'pause_music'
+}
+
+const VOLUME_KEY = 'cm_st_volume'
+const readVolume = (url) => { try { const v = JSON.parse(localStorage.getItem(VOLUME_KEY) || 'null'); return v?.url === url ? v.value : null } catch { return null } }
+const saveVolume = (url, value) => { try { localStorage.setItem(VOLUME_KEY, JSON.stringify({ url, value })) } catch { /* */ } }
+
+export default function Soundtrack({ config, muted, adSound, online, onIssue, onStatus }) {
   const [netOk, setNetOk] = useState(() => navigator.onLine !== false)
   const [retryAt, setRetryAt] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const [title, setTitle] = useState('')
   const [showVideo, setShowVideo] = useState(false)
   const [playingSince, setPlayingSince] = useState(null)
+  const [lastError, setLastError] = useState('')
   const fails = useRef(0)
+  // Controle remoto (celular)
+  const [userPaused, setUserPaused] = useState(false)
+  const [stopped, setStopped] = useState(false)
+  const [control, setControl] = useState(null)
+  const [volume, setVolume] = useState(() => readVolume(config?.url))
 
   // Falha passageira do servidor não interrompe a música: só desliga após 30 s sem conexão
   const [serverOk, setServerOk] = useState(online)
@@ -249,6 +280,14 @@ export default function Soundtrack({ config, muted, adSound, online, onIssue }) 
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
+  // Trocou a trilha no painel: volta ao estado normal
+  useEffect(() => {
+    setUserPaused(false)
+    setStopped(false)
+    setVolume(readVolume(config?.url))
+    setTitle('')
+  }, [config?.url])
+
   // Depois de uma falha, espera e tenta de novo (remonta o player)
   useEffect(() => {
     if (!retryAt) return
@@ -257,6 +296,7 @@ export default function Soundtrack({ config, muted, adSound, online, onIssue }) 
   }, [retryAt])
 
   const onFail = useCallback((detail) => {
+    setLastError(detail)
     setRetryAt((cur) => {
       if (cur) return cur
       const wait = BACKOFF[Math.min(fails.current, BACKOFF.length - 1)]
@@ -267,7 +307,35 @@ export default function Soundtrack({ config, muted, adSound, online, onIssue }) 
     setPlayingSince(null)
     setShowVideo(false)
   }, [onIssue])
-  const onPlaying = useCallback(() => setPlayingSince((t) => t || Date.now()), [])
+  const onPlaying = useCallback(() => { setPlayingSince((t) => t || Date.now()); setLastError('') }, [])
+
+  // Comandos do controle remoto
+  useEffect(() => {
+    const onCommand = (e) => {
+      const { cmd, value } = e.detail || {}
+      if (cmd === 'play') {
+        setUserPaused(false)
+        setStopped(false)
+        // Estava esperando para tentar de novo: tenta já
+        setRetryAt((cur) => { if (cur) { fails.current = 0; setAttempt((n) => n + 1) } return 0 })
+      } else if (cmd === 'pause') {
+        setUserPaused(true)
+      } else if (cmd === 'stop') {
+        setStopped(true)
+        setPlayingSince(null)
+        setShowVideo(false)
+      } else if (cmd === 'next' || cmd === 'prev') {
+        setUserPaused(false)
+        setControl({ cmd, n: Date.now() })
+      } else if (cmd === 'volume' && Number.isFinite(Number(value))) {
+        const v = Math.max(0, Math.min(100, Number(value)))
+        setVolume(v)
+        saveVolume(config?.url, v)
+      }
+    }
+    window.addEventListener('cm-soundtrack', onCommand)
+    return () => window.removeEventListener('cm-soundtrack', onCommand)
+  }, [config?.url])
 
   // Tocando bem por 5 min: zera a contagem de falhas
   useEffect(() => {
@@ -276,40 +344,55 @@ export default function Soundtrack({ config, muted, adSound, online, onIssue }) 
     return () => clearTimeout(t)
   }, [playingSince])
 
-  const cfg = config
-  const provider = cfg?.source?.provider
-  const active = !!PROVIDERS[provider] && serverOk && netOk && !muted && !retryAt
-  const paused = !!(cfg?.pause_on_ad_sound && adSound)
+  const provider = config?.source?.provider
+  const cfg = useMemo(() => (config ? { ...config, volume: volume ?? config.volume } : config), [config, volume])
+  const active = !!PROVIDERS[provider] && serverOk && netOk && !muted && !retryAt && !stopped
+  const adPaused = adAudioMode(config) === 'pause_music' && adSound
+  const paused = userPaused || adPaused
 
-  // Sem internet: zera o estado para recomeçar limpo quando voltar
+  // Sem internet ou parada: zera o estado para recomeçar limpo
   useEffect(() => { if (!active) { setPlayingSince(null); setShowVideo(false) } }, [active])
+
+  // Situação para o controle remoto (vai junto com o heartbeat)
+  const canSkip = (provider === 'youtube' && !!config?.source?.list_id) || provider === 'soundcloud'
+  const state = muted ? 'muted'
+    : stopped ? 'stopped'
+      : !netOk || !serverOk ? 'offline'
+        : retryAt ? 'error'
+          : userPaused ? 'paused'
+            : adPaused ? 'ad'
+              : playingSince ? 'playing' : 'loading'
+  useEffect(() => {
+    onStatus?.({ state, title, can_skip: canSkip, can_pause: true, volume: cfg?.volume ?? null, detail: state === 'error' ? lastError : '' })
+  }, [state, title, canSkip, cfg?.volume, lastError, onStatus])
+  useEffect(() => () => onStatus?.(null), [onStatus])
 
   // Miniatura do vídeo de tempos em tempos (YouTube)
   // Conta pelo relógio (as pausas das propagandas com som não zeram a contagem)
-  const withVideo = provider === 'youtube' && cfg.video_mode !== 'off'
+  const withVideo = provider === 'youtube' && config.video_mode !== 'off'
   const lastShown = useRef(0)
   useEffect(() => {
     if (!withVideo || !active || paused || !playingSince) { setShowVideo(false); return }
     if (!lastShown.current) lastShown.current = playingSince
-    const every = Math.max(1, cfg.video_every) * 60000
+    const every = Math.max(1, config.video_every) * 60000
     const t = setInterval(() => {
       const since = Date.now() - lastShown.current
       if (since >= every) {
         lastShown.current = Date.now()
         setShowVideo(true)
-      } else if (since >= cfg.video_for * 1000) {
+      } else if (since >= config.video_for * 1000) {
         setShowVideo(false)
       }
     }, 1000)
     return () => clearInterval(t)
-  }, [withVideo, active, paused, playingSince, cfg?.video_every, cfg?.video_for])
+  }, [withVideo, active, paused, playingSince, config?.video_every, config?.video_for])
 
   if (!active) return null
   const Track = PROVIDERS[provider]
-  const box = withVideo ? `cm-st-mini cm-st-${cfg.video_mode} cm-st-${cfg.corner}${showVideo ? ' on' : ''}` : 'cm-st-mini cm-st-audio'
+  const box = withVideo ? `cm-st-mini cm-st-${config.video_mode} cm-st-${config.corner}${showVideo ? ' on' : ''}` : 'cm-st-mini cm-st-audio'
   return (
-    <div className={box} aria-hidden={!showVideo} data-state={paused ? 'paused' : playingSince ? 'playing' : 'loading'}>
-      <Track key={`${cfg.url}#${attempt}`} cfg={cfg} paused={paused} onFail={onFail} onPlaying={onPlaying} onTitle={setTitle} />
+    <div className={box} aria-hidden={!showVideo} data-state={state}>
+      <Track key={`${config.url}#${attempt}`} cfg={cfg} paused={paused} onFail={onFail} onPlaying={onPlaying} onTitle={setTitle} control={control} />
       {withVideo && title && <div className="cm-st-title"><span>♪</span>{title}</div>}
     </div>
   )

@@ -237,7 +237,7 @@ export default function ScreenDetail() {
             )}
             <Button variant="ghost" size="sm" className="mt-3" to={`/grade?tv=${screen.id}`}>Ver na grade semanal</Button>
           </Card>
-          {canOp && <SoundtrackCard screen={screen} onSaved={reload} />}
+          {screen.can_soundtrack && <SoundtrackCard screen={screen} onSaved={reload} />}
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-span-2">
@@ -296,7 +296,7 @@ export default function ScreenDetail() {
               </div>
             </Card>
           )}
-          {isGuest && !canOp && <p className="text-center text-xs text-slate-500">Você tem acesso somente de visualização a esta TV.</p>}
+          {isGuest && !canOp && <p className="text-center text-xs text-slate-500">{screen.can_soundtrack ? 'Você cuida da trilha sonora desta TV. As propagandas são definidas pela equipe.' : 'Você tem acesso somente de visualização a esta TV.'}</p>}
         </div>
       </div>
 

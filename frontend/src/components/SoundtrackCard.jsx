@@ -7,7 +7,13 @@ import { useFetch } from '../lib/hooks'
 import { useToast } from './feedback'
 import { Badge, Button, Card, CardTitle, Field, Input, Segmented, Select, Toggle, cn } from './ui'
 
-const DEFAULTS = { enabled: false, url: '', volume: 60, shuffle: true, ad_audio: 'mute_ads', video_mode: 'off', video_every: 5, video_for: 20, corner: 'br' }
+const DEFAULTS = { enabled: false, url: '', volume: 60, shuffle: true, ad_audio: 'mute_ads', show_title: 'change', news_video: true, video_mode: 'off', video_every: 5, video_for: 20, corner: 'br' }
+
+const TITLE_HINTS = {
+  change: 'Quando a música muda, aparece por alguns segundos no canto, com uma animação discreta.',
+  always: 'Fica sempre no canto, pequeno e semitransparente.',
+  off: 'A TV não mostra o nome da música.',
+}
 
 const AD_AUDIO_HINTS = {
   mute_ads: 'As propagandas passam sem som e a música não para.',
@@ -52,7 +58,7 @@ export default function SoundtrackCard({ screen, onSaved }) {
   const set = (p) => setForm((f) => ({ ...f, ...p }))
   const src = detectSource(form.url)
   const dirty = JSON.stringify(form) !== JSON.stringify(initial)
-  const otherScreens = (list?.screens || []).filter((s) => s.id !== screen.id && s.can_operate)
+  const otherScreens = (list?.screens || []).filter((s) => s.id !== screen.id && s.can_soundtrack)
 
   const save = async (e) => {
     e.preventDefault()
@@ -111,6 +117,24 @@ export default function SoundtrackCard({ screen, onSaved }) {
                 options={[{ value: 'mute_ads', label: 'Só a música' }, { value: 'pause_music', label: 'Pausar a música' }, { value: 'both', label: 'Os dois' }]}
               />
             </Field>
+            {src?.provider !== 'stream' && src?.provider !== 'deezer' && (
+              <Field label="Nome da música na tela" hint={TITLE_HINTS[form.show_title]}>
+                <Segmented
+                  className="w-full"
+                  value={form.show_title}
+                  onChange={(v) => set({ show_title: v })}
+                  options={[{ value: 'change', label: 'Ao trocar' }, { value: 'always', label: 'Sempre' }, { value: 'off', label: 'Não' }]}
+                />
+              </Field>
+            )}
+            {src?.video && (
+              <Toggle
+                label="Vídeo junto das notícias"
+                description="Enquanto passam notícias, o vídeo da música aparece ao lado da manchete, mesclado com a imagem da notícia."
+                checked={form.news_video}
+                onChange={(v) => set({ news_video: v })}
+              />
+            )}
 
             {src?.video && (
               <div className="space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">

@@ -42,6 +42,7 @@ class ScreenController
             'screenshot_at' => $s['screenshot_at'] ?? null,
             'groups' => $groups[$id] ?? [],
             'can_operate' => $ctx->canOperateScreen($id),
+            'can_soundtrack' => $ctx->canControlSoundtrack($id),
             'guest_role' => $ctx->screens[$id] ?? null,
             'created_at' => $s['created_at'],
         ];
@@ -275,7 +276,11 @@ class ScreenController
         $ctx = org_ctx($org);
         $screen = self::find($ctx, $id);
         $sid = (int)$screen['id'];
-        if (!$ctx->canOperateScreen($sid)) abort('Você não tem permissão para alterar esta TV.', 403);
+        // Convidado "Só a trilha sonora" altera apenas a trilha
+        $onlySoundtrack = has_input('soundtrack') && !array_diff(array_keys(body()), ['soundtrack']);
+        if (!$ctx->canOperateScreen($sid) && !($onlySoundtrack && $ctx->canControlSoundtrack($sid))) {
+            abort('Você não tem permissão para alterar esta TV.', 403);
+        }
 
         $data = [];
         if (has_input('name')) {
@@ -332,7 +337,7 @@ class ScreenController
         $rows = DB::all('SELECT id, name FROM screens WHERE organization_id = ? AND id IN (' . DB::in($ids) . ')', array_merge([$ctx->id()], $ids));
         $done = [];
         foreach ($rows as $r) {
-            if (!$ctx->canOperateScreen((int)$r['id'])) continue;
+            if (!$ctx->canControlSoundtrack((int)$r['id'])) continue;
             DB::update('screens', ['soundtrack' => $json, 'updated_at' => now()], 'id = ?', [$r['id']]);
             $done[] = $r['name'];
         }

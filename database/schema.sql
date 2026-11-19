@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS screen_permissions (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   screen_id INT UNSIGNED NOT NULL,
   user_id INT UNSIGNED NOT NULL,
-  role ENUM('editor','viewer') NOT NULL DEFAULT 'editor',
+  role ENUM('editor','viewer','soundtrack') NOT NULL DEFAULT 'editor',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_screen_permissions (screen_id, user_id),
   CONSTRAINT fk_sp_screen FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,

@@ -86,7 +86,7 @@ class MemberController
         $ctx->require('admin');
         $row = self::guestRow($ctx, (int)$id);
         $role = str_input('role', 20);
-        if (!in_array($role, ['editor', 'viewer'], true)) abort('Papel inválido.', 422);
+        if (!isset(OrgCtx::SCREEN_RANK[$role])) abort('Papel inválido.', 422);
         DB::exec('UPDATE screen_permissions SET role = ? WHERE id = ?', [$role, $row['id']]);
         respond(['ok' => true]);
     }

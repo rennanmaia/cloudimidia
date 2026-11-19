@@ -11,6 +11,8 @@ declare(strict_types=1);
 class OrgCtx
 {
     public const RANK = ['viewer' => 1, 'editor' => 2, 'admin' => 3, 'owner' => 4];
+    /** Papéis de convidado de TV, do menor para o maior */
+    public const SCREEN_RANK = ['viewer' => 1, 'soundtrack' => 2, 'editor' => 3];
 
     public array $org;
     public array $user;
@@ -79,6 +81,12 @@ class OrgCtx
     public function canOperateScreen(int $screenId): bool
     {
         return $this->can('editor') || (($this->screens[$screenId] ?? null) === 'editor');
+    }
+
+    /** Pode cuidar da trilha sonora da TV (inclui o convidado "Só a trilha sonora"). */
+    public function canControlSoundtrack(int $screenId): bool
+    {
+        return $this->canOperateScreen($screenId) || (($this->screens[$screenId] ?? null) === 'soundtrack');
     }
 
     public function editableGuestScreens(): array

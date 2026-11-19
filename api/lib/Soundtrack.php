@@ -111,6 +111,10 @@ class Soundtrack
             'shuffle' => $bool('shuffle', true),
             'ad_audio' => $adAudio,
             // Miniatura do vídeo de tempos em tempos (só fontes com vídeo)
+            // Nome da música na tela: ao trocar de música (padrão), sempre (discreto) ou nunca
+            'show_title' => in_array($in['show_title'] ?? '', ['off', 'change', 'always'], true) ? $in['show_title'] : 'change',
+            // Vídeo do YouTube junto das notícias, mesclado com a imagem
+            'news_video' => $hasVideo && $bool('news_video', true),
             'video_mode' => $hasVideo && in_array($in['video_mode'] ?? '', self::VIDEO_MODES, true) ? $in['video_mode'] : 'off',
             'video_every' => $int('video_every', 1, 60, 5),
             'video_for' => $int('video_for', 5, 120, 20),

@@ -8,7 +8,7 @@ declare(strict_types=1);
  */
 class Migrations
 {
-    public const VERSION = 8;
+    public const VERSION = 9;
 
     public const PLAY_ISSUES_SQL = 'CREATE TABLE IF NOT EXISTS play_issues (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -101,6 +101,9 @@ class Migrations
                 ADD COLUMN soundtrack_state TEXT NULL AFTER soundtrack,
                 ADD COLUMN remote_until DATETIME NULL AFTER soundtrack_state');
         }
+
+        // v9: convidado "Só a trilha sonora" (dono ou funcionário do comércio)
+        DB::pdo()->exec("ALTER TABLE screen_permissions MODIFY role ENUM('editor','viewer','soundtrack') NOT NULL DEFAULT 'editor'");
 
         if (!is_dir(STORAGE_DIR)) {
             @mkdir(STORAGE_DIR, 0775, true);

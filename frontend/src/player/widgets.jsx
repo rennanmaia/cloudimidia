@@ -56,6 +56,12 @@ export function NewsWidget({ integration, data }) {
     const t = setInterval(() => setI((x) => (x + 1) % items.length), per * 1000)
     return () => clearInterval(t)
   }, [items.length, per])
+  // Avisa a trilha sonora qual imagem está na tela (o vídeo da música se mescla a ela)
+  const image = items[i % Math.max(1, items.length)]?.image || null
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('cm-news-image', { detail: image }))
+  }, [image])
+  useEffect(() => () => window.dispatchEvent(new CustomEvent('cm-news-image', { detail: null })), [])
   if (!data) return <Loading />
   const it = items[i % Math.max(1, items.length)]
   if (!it) return <Loading />

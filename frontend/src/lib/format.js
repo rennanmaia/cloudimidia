@@ -54,7 +54,12 @@ export const ROLE_DESCRIPTIONS = {
   editor: 'Gerencia conteúdo, playlists e programação',
   viewer: 'Apenas visualiza',
 }
-export const SCREEN_ROLE_LABELS = { editor: 'Pode programar', viewer: 'Só visualiza' }
+export const SCREEN_ROLE_LABELS = { editor: 'Pode programar', soundtrack: 'Só a trilha sonora', viewer: 'Só visualiza' }
+export const SCREEN_ROLE_DESCRIPTIONS = {
+  editor: 'Liga/desliga, troca a playlist, envia mídias e monta a grade destas TVs',
+  soundtrack: 'Escolhe a música do estabelecimento e usa o controle remoto no celular. Não mexe nas propagandas',
+  viewer: 'Acompanha o status e a programação destas TVs',
+}
 
 export const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 export const DAYS_LONG = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']

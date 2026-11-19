@@ -23,6 +23,8 @@ function isPlayable(item, integrations, cached) {
   return !!integ && integ.type !== 'music'
 }
 
+const isNewsItem = (item, integrations) => item?.type === 'integration' && integrations?.[item.integration_id]?.type === 'rss'
+
 const MEDIA_ERRORS = {
   1: 'Carregamento interrompido',
   2: 'Falha de rede ao carregar o vídeo',
@@ -265,6 +267,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
   const [current, setCurrent] = useState(null)
   const [layers, setLayers] = useState([])
   const [videoSound, setVideoSound] = useState(false)
+  const [newsDock, setNewsDock] = useState(false)
 
   const refs = useRef({ manifest, program, baseIdx: {}, insertIdx: {}, since: 0, queue: [], key: 0, current: null, startedAt: 0, endFns: new Map() })
   refs.current.manifest = manifest
@@ -425,6 +428,8 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
   const soundtrack = !preview && manifest?.screen?.soundtrack?.source ? manifest.screen.soundtrack : null
   // Trilha configurada para "tirar o som da propaganda": vídeos e YouTube da programação sem som
   const muteAds = adAudioMode(soundtrack) === 'mute_ads'
+  // Notícias na tela (já aparecendo): o vídeo da trilha entra junto
+  const currentIsNews = !!current && layers.some((l) => l.key === current.key && l.shown) && isNewsItem(current.item, integrations)
 
   return (
     <div className="cm-stage">
@@ -447,14 +452,14 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
           return (
             <div
               key={key}
-              className={`cm-layer ${shown && !leaving && transition !== 'none' ? `enter-${transition}` : ''}`}
+              className={`cm-layer ${shown && !leaving && transition !== 'none' ? `enter-${transition}` : ''}${newsDock && !leaving && isNewsItem(item, integrations) ? ' cm-dock-news' : ''}`}
               style={{ zIndex: leaving ? 1 : 2, opacity: shown ? undefined : 0 }}
             >
               {content}
             </div>
           )
         })}
-        {soundtrack && <Soundtrack config={soundtrack} muted={muted} adSound={videoSound} online={online} onIssue={onIssue} onStatus={onSoundtrackStatus} />}
+        {soundtrack && <Soundtrack config={soundtrack} muted={muted} adSound={videoSound} online={online} onIssue={onIssue} onStatus={onSoundtrackStatus} dockNews={currentIsNews} onDock={setNewsDock} />}
         {identify && (
           <div className="cm-identify">
             <small>Esta TV é</small>

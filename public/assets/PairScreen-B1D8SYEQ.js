@@ -1,4 +1,4 @@
-import{c as z,a as o,j as e,T as y,S as Q,b as I}from"./smartphone-Bnmpb-LC.js";import{u as W,j as K,G as X,W as Y,b as w,B as g,a as S,A as F,d as Z,o as ee,e as C,T as ae,F as j,I as L,z as se,r as te,c as re}from"./index-BcAZzb-D.js";import{a as le}from"./InstallLink-BX0TowyT.js";import{u as M}from"./hooks-DnW_8ASb.js";import{C as ne}from"./clock-DCHVqvs0.js";import{C as oe}from"./copy-B4mw3yu0.js";import"./InviteModal-DzFioX_c.js";import"./ban-CiAYjU8Z.js";import"./key-round-DjWFKJmn.js";import"./link-2-BOVxx3AP.js";/**
+import{c as z,a as o,j as e,T as y,S as Q,b as I}from"./smartphone-Bnmpb-LC.js";import{u as W,j as K,v as X,W as Y,b as w,B as g,a as S,A as F,d as Z,o as ee,e as C,T as ae,F as j,I as L,D as se,r as te,c as re}from"./index-DwEDoTNL.js";import{a as le}from"./InstallLink-CEGE89Bd.js";import{u as M}from"./hooks-DnW_8ASb.js";import{C as ne}from"./clock-DCHVqvs0.js";import{C as oe}from"./copy-B4mw3yu0.js";import"./InviteModal-s39V88nt.js";import"./ban-CiAYjU8Z.js";import"./key-round-DjWFKJmn.js";import"./link-2-BOVxx3AP.js";/**
  * @license lucide-react v0.460.0 - ISC
  *
  * This source code is licensed under the ISC license.

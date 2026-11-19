@@ -134,6 +134,7 @@ export default function TeamPage() {
                       <div className="flex items-center gap-1">
                         <Select value={g.role} onChange={(e) => changeGuest(g, e.target.value)} className="h-9 w-40 text-sm">
                           <option value="editor">{SCREEN_ROLE_LABELS.editor}</option>
+                          <option value="soundtrack">{SCREEN_ROLE_LABELS.soundtrack}</option>
                           <option value="viewer">{SCREEN_ROLE_LABELS.viewer}</option>
                         </Select>
                         <IconButton icon={Trash2} label="Remover" size="sm" variant="danger-ghost" onClick={() => removeGuest(g)} />

@@ -237,3 +237,44 @@
 .cm-st-title { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: .5em; align-items: center; padding: 1.6em .9em .7em; background: linear-gradient(transparent, rgba(0,0,0,.8)); color: #fff; font: 600 max(11px, 1.7cqmin)/1.25 Inter, system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-st-title span { color: #a5b4fc; }
 .cm-st-frame { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+
+/* Nome da música: faixa discreta com equalizador animado (entra e sai suave) */
+.cm-st-toast { position: absolute; z-index: 7; display: flex; align-items: center; gap: 1.4cqmin; max-width: 44%; padding: 1.2cqmin 2.4cqmin 1.2cqmin 1.6cqmin; border-radius: 99px; background: rgba(15, 23, 42, .72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #fff; box-shadow: 0 1cqmin 4cqmin rgba(0,0,0,.35); pointer-events: none; animation: cm-st-in .7s cubic-bezier(.2,.8,.2,1) both; }
+.cm-st-toast.out { animation: cm-st-out .6s ease both; }
+.cm-st-toast.always { padding: .9cqmin 2cqmin .9cqmin 1.3cqmin; background: rgba(15, 23, 42, .55); max-width: 36%; }
+.cm-st-toast-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; font-family: Inter, system-ui, sans-serif; }
+.cm-st-toast-text small { font-size: max(9px, 1.35cqmin); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a5b4fc; }
+.cm-st-toast-text b { font-size: max(11px, 2cqmin); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-st-toast.always .cm-st-toast-text b { font-size: max(10px, 1.7cqmin); font-weight: 500; opacity: .92; }
+.cm-eq { display: flex; align-items: flex-end; gap: .35cqmin; height: 2.6cqmin; flex-shrink: 0; }
+.cm-eq i { width: .45cqmin; min-width: 2px; height: 100%; border-radius: 2px; background: #a5b4fc; transform-origin: bottom; animation: cm-eq 1s ease-in-out infinite; }
+.cm-eq i:nth-child(2) { animation-delay: -.4s; animation-duration: .8s; }
+.cm-eq i:nth-child(3) { animation-delay: -.2s; animation-duration: 1.2s; }
+.cm-eq i:nth-child(4) { animation-delay: -.6s; animation-duration: .9s; }
+@keyframes cm-eq { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+@keyframes cm-st-in { from { opacity: 0; transform: translateY(2cqh) scale(.96); } }
+@keyframes cm-st-out { to { opacity: 0; transform: translateY(2cqh); } }
+
+/* Notícias: vídeo da trilha no alto à direita, com bordas que se misturam à imagem da notícia */
+.cm-st-mini.cm-st-dock { top: 6%; right: 3%; left: auto; bottom: auto; width: 46%; aspect-ratio: 16 / 9; border-radius: 2cqmin; background: transparent; box-shadow: none; opacity: 1; animation: cm-fade 1s ease both;
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 62%, transparent 100%); }
+.cm-st-dock .cm-st-title { padding-bottom: 1.6em; padding-left: 1.6em; background: none; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+.cm-dock-news .cm-news-body { right: 52cqw; }
+.cm-dock-news .cm-news-body.center, .cm-dock-news .cm-news-noimg + .cm-news-body { left: 5cqw; right: 52cqw; top: auto; bottom: 8cqh; transform: none; }
+.cm-dock-news .cm-news-title { font-size: min(6.4cqh, 3.4cqw); }
+.cm-dock-news .cm-news-shade { background: linear-gradient(90deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.15) 70%), linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.8) 100%); }
+/* A máscara não se aplica ao iframe do YouTube em todos os aparelhos: mescla por transparência e vinheta nas bordas */
+.cm-st-mini.cm-st-dock { opacity: .9; }
+.cm-st-dock::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 6cqmin 3cqmin rgba(8, 12, 24, .92), inset 0 0 1.5cqmin .5cqmin rgba(8, 12, 24, .9); }
+.cm-st-dock .cm-st-title { z-index: 1; }
+/* Mescla com a notícia: a mesma foto (e sombra) do fundo, no lugar exato, só nas bordas do vídeo */
+.cm-st-dock::after { box-shadow: none; }
+.cm-st-blend { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, transparent 52%, #000 92%); mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, transparent 52%, #000 92%); }
+.cm-st-blend img, .cm-st-blend i { position: absolute; left: -51cqw; top: -6cqh; width: 100cqw; height: 100cqh; }
+.cm-st-blend img { object-fit: cover; animation: cm-kenburns 14s ease-out both; }
+.cm-st-blend i { background: linear-gradient(90deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.15) 70%), linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.8) 100%); }
+.cm-st-dock .cm-st-title { z-index: 2; }
+/* Degradê medido até as bordas (closest-side): centro transparente, bordas = foto da notícia */
+.cm-st-blend { -webkit-mask-image: radial-gradient(closest-side, transparent 55%, rgba(0,0,0,.6) 80%, #000 100%); mask-image: radial-gradient(closest-side, transparent 55%, rgba(0,0,0,.6) 80%, #000 100%); }
+.cm-st-mini.cm-st-dock { -webkit-mask-image: none; mask-image: none; border-radius: 0; }

@@ -15,7 +15,7 @@ class RemoteController
     {
         $s = DB::one('SELECT * FROM screens WHERE id = ? AND organization_id = ?', [(int)$id, $ctx->id()]);
         if (!$s || !$ctx->canViewScreen((int)$s['id'])) abort('TV não encontrada.', 404);
-        if (!$ctx->canOperateScreen((int)$s['id'])) abort('Você não tem permissão para controlar esta TV.', 403);
+        if (!$ctx->canControlSoundtrack((int)$s['id'])) abort('Você não tem permissão para controlar esta TV.', 403);
         return $s;
     }
 

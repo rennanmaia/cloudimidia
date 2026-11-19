@@ -49,7 +49,7 @@ class InvitationController
             $existing = DB::val('SELECT m.role FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.organization_id = ? AND u.email = ?', [$ctx->id(), $email]);
             if ($existing) abort('Esta pessoa já faz parte da equipe.', 422);
         } else {
-            if (!in_array($role, ['viewer', 'editor'], true)) abort('Papel inválido.', 422);
+            if (!isset(OrgCtx::SCREEN_RANK[$role])) abort('Papel inválido.', 422);
             $screenIds = ints(input('screen_ids', []));
             if (!$screenIds) abort('Selecione ao menos uma TV.', 422);
             $valid = DB::col('SELECT id FROM screens WHERE organization_id = ? AND id IN (' . DB::in($screenIds) . ')', array_merge([$ctx->id()], $screenIds));
@@ -139,8 +139,8 @@ class InvitationController
                     $exists = DB::one('SELECT * FROM screen_permissions WHERE screen_id = ? AND user_id = ?', [$sid, $userId]);
                     if (!$exists) {
                         DB::insert('screen_permissions', ['screen_id' => $sid, 'user_id' => $userId, 'role' => $inv['role'], 'created_at' => now()]);
-                    } elseif ($exists['role'] === 'viewer' && $inv['role'] === 'editor') {
-                        DB::exec('UPDATE screen_permissions SET role = "editor" WHERE id = ?', [$exists['id']]);
+                    } elseif ((OrgCtx::SCREEN_RANK[$inv['role']] ?? 0) > (OrgCtx::SCREEN_RANK[$exists['role']] ?? 0)) {
+                        DB::exec('UPDATE screen_permissions SET role = ? WHERE id = ?', [$inv['role'], $exists['id']]);
                     }
                 }
             }

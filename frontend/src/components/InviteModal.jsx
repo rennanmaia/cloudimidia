@@ -3,7 +3,7 @@ import { Copy, Check, MessageCircle, Mail, Building2, Tv } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useFetch } from '../lib/hooks'
-import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../lib/format'
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, SCREEN_ROLE_DESCRIPTIONS, SCREEN_ROLE_LABELS } from '../lib/format'
 import { useToast } from './feedback'
 import { Button, Field, Input, Modal, Segmented, cn } from './ui'
 
@@ -68,7 +68,7 @@ export default function InviteModal({ open, onClose, onInvited, presetScreenIds 
     }
   }
 
-  const roles = form.scope === 'org' ? ['viewer', 'editor', 'admin', ...(can('owner') ? ['owner'] : [])] : ['editor', 'viewer']
+  const roles = form.scope === 'org' ? ['viewer', 'editor', 'admin', ...(can('owner') ? ['owner'] : [])] : ['editor', 'soundtrack', 'viewer']
   const toggleScreen = (id) => setForm((f) => ({ ...f, screen_ids: f.screen_ids.includes(id) ? f.screen_ids.filter((x) => x !== id) : [...f.screen_ids, id] }))
 
   return (
@@ -119,10 +119,10 @@ export default function InviteModal({ open, onClose, onInvited, presetScreenIds 
                   <input type="radio" name="role" className="mt-1 accent-brand-600" checked={form.role === r} onChange={() => setForm({ ...form, role: r })} />
                   <span>
                     <span className="block text-sm font-semibold text-slate-800">
-                      {form.scope === 'org' ? ROLE_LABELS[r] : r === 'editor' ? 'Pode programar' : 'Só visualiza'}
+                      {form.scope === 'org' ? ROLE_LABELS[r] : SCREEN_ROLE_LABELS[r]}
                     </span>
                     <span className="block text-xs text-slate-500">
-                      {form.scope === 'org' ? ROLE_DESCRIPTIONS[r] : r === 'editor' ? 'Liga/desliga, troca a playlist, envia mídias e monta a grade destas TVs' : 'Acompanha o status e a programação destas TVs'}
+                      {form.scope === 'org' ? ROLE_DESCRIPTIONS[r] : SCREEN_ROLE_DESCRIPTIONS[r]}
                     </span>
                   </span>
                 </label>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Tv, PlayCircle, MapPin, Power, PlugZap } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Tv, PlayCircle, MapPin, Power, PlugZap, Music2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { timeAgo } from '../lib/format'
@@ -27,6 +27,7 @@ export function useScreenToggle(onChange) {
 }
 
 export function ScreenCard({ screen, onToggle, busy }) {
+  const navigate = useNavigate()
   const status = !screen.paired ? 'pending' : !screen.is_active ? 'off' : screen.online ? 'on' : 'offline'
   return (
     <Link
@@ -67,6 +68,17 @@ export function ScreenCard({ screen, onToggle, busy }) {
             </div>
           )}
         </div>
+        {screen.soundtrack && screen.can_soundtrack && (
+          <button
+            type="button"
+            title="Controle da trilha sonora"
+            aria-label="Controle da trilha sonora"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/tvs/${screen.id}/controle`) }}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-100"
+          >
+            <Music2 className="size-5" />
+          </button>
+        )}
         {screen.can_operate && onToggle && (
           <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
             <Toggle checked={screen.is_active} disabled={busy === screen.id} onChange={(v) => onToggle(screen, v)} />

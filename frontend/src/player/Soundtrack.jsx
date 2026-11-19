@@ -249,7 +249,7 @@ const VOLUME_KEY = 'cm_st_volume'
 const readVolume = (url) => { try { const v = JSON.parse(localStorage.getItem(VOLUME_KEY) || 'null'); return v?.url === url ? v.value : null } catch { return null } }
 const saveVolume = (url, value) => { try { localStorage.setItem(VOLUME_KEY, JSON.stringify({ url, value })) } catch { /* */ } }
 
-export default function Soundtrack({ config, muted, adSound, online, onIssue, onStatus }) {
+export default function Soundtrack({ config, muted, adSound, online, onIssue, onStatus, dockNews, onDock }) {
   const [netOk, setNetOk] = useState(() => navigator.onLine !== false)
   const [retryAt, setRetryAt] = useState(0)
   const [attempt, setAttempt] = useState(0)
@@ -387,13 +387,52 @@ export default function Soundtrack({ config, muted, adSound, online, onIssue, on
     return () => clearInterval(t)
   }, [withVideo, active, paused, playingSince, config?.video_every, config?.video_for])
 
+  // Notícias na tela: o vídeo do YouTube aparece junto, mesclado com a imagem da notícia
+  const docked = provider === 'youtube' && config.news_video !== false && !!dockNews && active && !paused && !!playingSince
+  useEffect(() => { onDock?.(docked) }, [docked, onDock])
+  const [newsImage, setNewsImage] = useState(null)
+  useEffect(() => {
+    const on = (e) => setNewsImage(e.detail || null)
+    window.addEventListener('cm-news-image', on)
+    return () => window.removeEventListener('cm-news-image', on)
+  }, [])
+  useEffect(() => () => onDock?.(false), [onDock])
+
+  // Nome da música: aparece ao trocar de música (8 s) ou sempre, discreto, sem cobrir a propaganda
+  const titleMode = config?.show_title || 'change'
+  const [toast, setToast] = useState(null) // null | 'in' | 'out'
+  useEffect(() => {
+    if (titleMode !== 'change' || !title) return
+    setToast('in')
+    const out = setTimeout(() => setToast('out'), 7500)
+    const end = setTimeout(() => setToast(null), 8100)
+    return () => { clearTimeout(out); clearTimeout(end) }
+  }, [title, titleMode])
+  const videoOnScreen = showVideo || docked
+  const showToast = state === 'playing' && !!title && !videoOnScreen && (titleMode === 'always' || (titleMode === 'change' && toast))
+
   if (!active) return null
   const Track = PROVIDERS[provider]
-  const box = withVideo ? `cm-st-mini cm-st-${config.video_mode} cm-st-${config.corner}${showVideo ? ' on' : ''}` : 'cm-st-mini cm-st-audio'
+  const box = docked
+    ? 'cm-st-mini cm-st-dock on'
+    : withVideo ? `cm-st-mini cm-st-${config.video_mode} cm-st-${config.corner}${showVideo ? ' on' : ''}` : 'cm-st-mini cm-st-audio'
   return (
-    <div className={box} aria-hidden={!showVideo} data-state={state}>
-      <Track key={`${config.url}#${attempt}`} cfg={cfg} paused={paused} onFail={onFail} onPlaying={onPlaying} onTitle={setTitle} control={control} />
-      {withVideo && title && <div className="cm-st-title"><span>♪</span>{title}</div>}
-    </div>
+    <>
+      <div className={box} aria-hidden={!videoOnScreen} data-state={state}>
+        <Track key={`${config.url}#${attempt}`} cfg={cfg} paused={paused} onFail={onFail} onPlaying={onPlaying} onTitle={setTitle} control={control} />
+        {/* Cópia da imagem da notícia, alinhada ao fundo, cobrindo as bordas do vídeo: o vídeo "some" dentro da foto */}
+        {docked && newsImage && <div className="cm-st-blend"><img key={newsImage} src={newsImage} alt="" referrerPolicy="no-referrer" /><i /></div>}
+        {(withVideo || docked) && title && <div className="cm-st-title"><span>♪</span>{title}</div>}
+      </div>
+      {showToast && (
+        <div key={titleMode === 'always' ? 'always' : title} className={`cm-st-toast cm-st-${config.corner || 'br'}${titleMode === 'always' ? ' always' : ''}${toast === 'out' && titleMode !== 'always' ? ' out' : ''}`}>
+          <span className="cm-eq" aria-hidden="true"><i /><i /><i /><i /></span>
+          <span className="cm-st-toast-text">
+            {titleMode !== 'always' && <small>Tocando agora</small>}
+            <b>{title}</b>
+          </span>
+        </div>
+      )}
+    </>
   )
 }

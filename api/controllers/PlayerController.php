@@ -153,7 +153,7 @@ class PlayerController
         $issues = input('issues');
         if (is_array($issues)) {
             foreach (array_slice($issues, 0, 50) as $i) {
-                if (!is_array($i) || !in_array($i['reason'] ?? '', ['error', 'stalled', 'timeout', 'empty', 'disabled', 'restart'], true)) continue;
+                if (!is_array($i) || !in_array($i['reason'] ?? '', ['error', 'stalled', 'timeout', 'empty', 'disabled', 'restart', 'soundtrack'], true)) continue;
                 $ts = isset($i['at']) && is_numeric($i['at']) ? (int)floor($i['at'] / 1000) : time();
                 if ($ts < time() - 7 * 86400 || $ts > time() + 600) $ts = time();
                 DB::insert('play_issues', [

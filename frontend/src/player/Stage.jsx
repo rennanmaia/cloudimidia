@@ -5,6 +5,7 @@ import {
   useIntegrationData, loadIntegrationData,
 } from './widgets'
 import Footer from './Footer'
+import Soundtrack from './Soundtrack'
 import FutDigitalWidget from './FutDigitalWidget'
 import FutDigitalSlotItem, { SlotPrewarm, slotBlocked } from './FutDigitalSlotItem'
 import './player.css'
@@ -257,7 +258,7 @@ export function IdleScreen({ org, message = 'Aguardando programação' }) {
  * - onPlayed(log): chamado ao fim de cada item (comprovação de exibição)
  * - onNowPlaying(texto)
  */
-export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecover, cachedMedia, onNowPlaying, identify, preview }) {
+export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecover, cachedMedia, onNowPlaying, identify, preview, online = true }) {
   const integrations = manifest?.integrations || {}
   const muted = !!manifest?.screen?.muted
   const [program, setProgram] = useState(() => resolveProgram(manifest))
@@ -421,6 +422,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
   const basePlaylist = program.base ? manifest?.playlists?.[program.base.playlistId] : current?.playlist
   const tickerPlaylist = basePlaylist || current?.playlist
   const musicInteg = tickerPlaylist?.music_integration_id ? integrations[tickerPlaylist.music_integration_id] : null
+  const soundtrack = !preview && manifest?.screen?.soundtrack?.source ? manifest.screen.soundtrack : null
 
   return (
     <div className="cm-stage">
@@ -450,6 +452,7 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
             </div>
           )
         })}
+        {soundtrack && <Soundtrack config={soundtrack} muted={muted} adSound={videoSound} online={online} onIssue={onIssue} />}
         {identify && (
           <div className="cm-identify">
             <small>Esta TV é</small>
@@ -458,7 +461,8 @@ export default function Stage({ manifest, fetchData, onPlayed, onIssue, onRecove
         )}
       </div>
       {tickerPlaylist?.footer && <Footer footer={tickerPlaylist.footer} integrations={integrations} fetchData={fetchData} org={manifest?.organization} />}
-      {musicInteg && <Music integration={musicInteg} paused={muted || videoSound} />}
+      {/* A trilha sonora da TV vale mais que a música da playlist */}
+      {musicInteg && !soundtrack && <Music integration={musicInteg} paused={muted || videoSound} />}
       {!preview && <SlotPrewarm integrations={integrations} />}
     </div>
   )

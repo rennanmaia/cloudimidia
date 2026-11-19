@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import InstallLinkModal from '../../components/InstallLink'
 import AppDevicePanel from '../../components/AppDevicePanel'
+import SoundtrackCard from '../../components/SoundtrackCard'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useFetch } from '../../lib/hooks'
@@ -236,6 +237,7 @@ export default function ScreenDetail() {
             )}
             <Button variant="ghost" size="sm" className="mt-3" to={`/grade?tv=${screen.id}`}>Ver na grade semanal</Button>
           </Card>
+          {canOp && <SoundtrackCard screen={screen} onSaved={reload} />}
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-span-2">
@@ -313,6 +315,7 @@ const ISSUE_LABELS = {
   empty: { label: 'Sem conteúdo', color: 'slate' },
   disabled: { label: 'Desativado', color: 'red' },
   restart: { label: 'Player reiniciado', color: 'amber' },
+  soundtrack: { label: 'Falha na trilha', color: 'amber' },
 }
 
 /** Itens que a TV pulou nos últimos 7 dias (mídias com problema). */

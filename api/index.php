@@ -69,6 +69,7 @@ try {
     $r->post('orgs/{org}/screens/pair', [ScreenController::class, 'pair']);
     $r->post('orgs/{org}/screens/{id}/install-link', [ScreenController::class, 'installLink']);
     $r->delete('orgs/{org}/screens/{id}/install-link', [ScreenController::class, 'revokeInstallLink']);
+    $r->post('orgs/{org}/screens/soundtrack', [ScreenController::class, 'soundtrackBulk']);
     $r->get('orgs/{org}/screens/{id}', [ScreenController::class, 'show']);
     $r->put('orgs/{org}/screens/{id}', [ScreenController::class, 'update']);
     $r->delete('orgs/{org}/screens/{id}', [ScreenController::class, 'destroy']);

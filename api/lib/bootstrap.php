@@ -41,6 +41,7 @@ require __DIR__ . '/Migrations.php';
 require __DIR__ . '/Footer.php';
 require __DIR__ . '/Credentials.php';
 require __DIR__ . '/FutDigitalClient.php';
+require __DIR__ . '/Soundtrack.php';
 
 spl_autoload_register(function (string $class) {
     $file = API_ROOT . '/controllers/' . $class . '.php';

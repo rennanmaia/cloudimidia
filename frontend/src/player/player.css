@@ -221,3 +221,18 @@
 /* Slot FutDigital: página pronta do FutDigital (fundo da própria página, sem clarão branco) */
 .cm-fd-slot { position: absolute; inset: 0; background: #04140c; }
 .cm-fd-slot iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; background: #04140c; }
+
+/* Trilha sonora: player em segundo plano; miniatura do vídeo de tempos em tempos */
+.cm-st-mini { position: absolute; z-index: 6; pointer-events: none; opacity: 0; transition: opacity .7s ease; overflow: hidden; background: #000; border-radius: 1.4cqmin; box-shadow: 0 1.2cqmin 4cqmin rgba(0,0,0,.55); }
+.cm-st-mini.on { opacity: 1; }
+.cm-st-audio { width: 256px; height: 144px; right: 0; bottom: 0; box-shadow: none; }
+.cm-st-small { width: 22%; aspect-ratio: 16 / 9; }
+.cm-st-medium { width: 34%; aspect-ratio: 16 / 9; }
+.cm-st-br { right: 2.5%; bottom: 3.5%; }
+.cm-st-bl { left: 2.5%; bottom: 3.5%; }
+.cm-st-tr { right: 2.5%; top: 3.5%; }
+.cm-st-tl { left: 2.5%; top: 3.5%; }
+.cm-st-host, .cm-st-host iframe { width: 100%; height: 100%; border: 0; display: block; }
+.cm-st-hidden { position: absolute; left: 0; top: 0; width: 300px; height: 152px; border: 0; opacity: 0; pointer-events: none; }
+.cm-st-title { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: .5em; align-items: center; padding: 1.6em .9em .7em; background: linear-gradient(transparent, rgba(0,0,0,.8)); color: #fff; font: 600 max(11px, 1.7cqmin)/1.25 Inter, system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-st-title span { color: #a5b4fc; }

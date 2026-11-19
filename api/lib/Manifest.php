@@ -159,6 +159,7 @@ class Manifest
                 'is_active' => (bool)$screen['is_active'] && $org['status'] === 'active',
                 'muted' => (bool)$screen['muted'],
                 'rotation' => (int)$screen['rotation'],
+                'soundtrack' => decode_json($screen['soundtrack'] ?? null, null),
             ],
             'organization' => [
                 'name' => $org['name'],

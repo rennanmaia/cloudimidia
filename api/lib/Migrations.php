@@ -8,7 +8,7 @@ declare(strict_types=1);
  */
 class Migrations
 {
-    public const VERSION = 6;
+    public const VERSION = 7;
 
     public const PLAY_ISSUES_SQL = 'CREATE TABLE IF NOT EXISTS play_issues (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -89,6 +89,11 @@ class Migrations
 
         // v6: itens pulados nas TVs (erro, travou, não começou)
         DB::pdo()->exec(self::PLAY_ISSUES_SQL);
+
+        // v7: trilha sonora da TV
+        if (!self::columnExists('screens', 'soundtrack')) {
+            DB::pdo()->exec('ALTER TABLE screens ADD COLUMN soundtrack TEXT NULL AFTER rotation');
+        }
 
         if (!is_dir(STORAGE_DIR)) {
             @mkdir(STORAGE_DIR, 0775, true);

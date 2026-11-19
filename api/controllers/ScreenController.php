@@ -18,6 +18,7 @@ class ScreenController
             'is_active' => (bool)$s['is_active'],
             'muted' => (bool)$s['muted'],
             'rotation' => (int)$s['rotation'],
+            'soundtrack' => decode_json($s['soundtrack'] ?? null, null),
             'default_playlist_id' => $s['default_playlist_id'] !== null ? (int)$s['default_playlist_id'] : null,
             'default_playlist_name' => $s['default_playlist_name'] ?? null,
             'paired' => $s['device_token_hash'] !== null,
@@ -256,7 +257,7 @@ class ScreenController
             'issues' => array_map(fn($r) => [
                 'media_id' => $r['media_id'] !== null ? (int)$r['media_id'] : null,
                 'integration_id' => $r['integration_id'] !== null ? (int)$r['integration_id'] : null,
-                'name' => $r['name'] ?? 'Item removido',
+                'name' => $r['name'] ?? ['soundtrack' => 'Trilha sonora', 'restart' => 'Player da TV'][$r['reason']] ?? 'Item removido',
                 'media_type' => $r['media_type'],
                 'reason' => $r['reason'],
                 'detail' => $r['detail'],
@@ -286,6 +287,10 @@ class ScreenController
         if (has_input('notes')) $data['notes'] = str_input('notes', 2000) ?: null;
         if (has_input('is_active')) $data['is_active'] = bool_input('is_active') ? 1 : 0;
         if (has_input('muted')) $data['muted'] = bool_input('muted') ? 1 : 0;
+        if (has_input('soundtrack')) {
+            $st = Soundtrack::sanitize(input('soundtrack'));
+            $data['soundtrack'] = $st ? json_encode($st, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+        }
         if (has_input('rotation')) {
             $rot = (int)input('rotation');
             if (!in_array($rot, [0, 90, 180, 270], true)) abort('Rotação inválida.', 422);
@@ -311,8 +316,29 @@ class ScreenController
         $changes = [];
         if (isset($data['is_active'])) $changes[] = $data['is_active'] ? 'ativada' : 'desativada';
         if (array_key_exists('default_playlist_id', $data)) $changes[] = 'playlist padrão alterada';
+        if (array_key_exists('soundtrack', $data)) $changes[] = $data['soundtrack'] ? 'trilha sonora alterada' : 'trilha sonora desligada';
         log_activity($ctx->id(), 'screen.updated', "TV \"" . ($data['name'] ?? $screen['name']) . '" ' . ($changes ? implode(', ', $changes) : 'atualizada'));
         respond(['screen' => self::listScreens($ctx, [$sid])[0]]);
+    }
+
+    /** Aplica a mesma trilha sonora em várias TVs (só nas que a pessoa pode operar). */
+    public static function soundtrackBulk($org): void
+    {
+        $ctx = org_ctx($org);
+        $st = Soundtrack::sanitize(input('soundtrack'));
+        $json = $st ? json_encode($st, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+        $ids = array_slice(ints(input('screen_ids', [])), 0, 500);
+        if (!$ids) abort('Escolha ao menos uma TV.', 422);
+        $rows = DB::all('SELECT id, name FROM screens WHERE organization_id = ? AND id IN (' . DB::in($ids) . ')', array_merge([$ctx->id()], $ids));
+        $done = [];
+        foreach ($rows as $r) {
+            if (!$ctx->canOperateScreen((int)$r['id'])) continue;
+            DB::update('screens', ['soundtrack' => $json, 'updated_at' => now()], 'id = ?', [$r['id']]);
+            $done[] = $r['name'];
+        }
+        if (!$done) abort('Você não tem permissão para alterar essas TVs.', 403);
+        log_activity($ctx->id(), 'screen.updated', 'Trilha sonora ' . ($st ? 'aplicada' : 'desligada') . ' em: ' . implode(', ', $done));
+        respond(['updated' => count($done)]);
     }
 
     public static function destroy($org, $id): void

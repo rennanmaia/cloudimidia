@@ -317,7 +317,7 @@ function Runtime({ token, onUnpaired }) {
     <div style={S.full}>
       <div style={wrapStyle}>
         {manifest.screen?.is_active ? (
-          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} onRecover={onRecover} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
+          cacheKnown && <Stage manifest={view.manifest} fetchData={fetchData} onPlayed={onPlayed} onIssue={onIssue} onRecover={onRecover} online={online} cachedMedia={cachedMedia ?? null} onNowPlaying={onNowPlaying} identify={identify} />
         ) : (
           <div className="cm-stage cm-off">
             {identify && <div className="cm-identify"><small>Esta TV é</small><b>{manifest.screen?.name}</b></div>}
